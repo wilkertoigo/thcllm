@@ -1,10 +1,10 @@
 ---
-title: Space Gemma4
-emoji: 🐠
-colorFrom: green
-colorTo: yellow
+title: Gemma 4 12B API Server
+emoji: 🚀
+colorFrom: blue
+colorTo: gray
 sdk: docker
-pinned: false
+app_port: 7860
 license: mit
 ---
 
