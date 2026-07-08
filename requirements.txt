@@ -1,0 +1,3 @@
+llama-cpp-python>=0.2.75
+huggingface_hub>=0.20.0
+flask>=3.0.0
