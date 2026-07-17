@@ -1,10 +1,10 @@
 ---
-title: Gemma 4 12B API Server
-emoji: 🚀
-colorFrom: blue
-colorTo: gray
+title: THC LLM
+emoji: 🤖
+colorFrom: green
+colorTo: blue
 sdk: docker
-app_port: 7860
+pinned: false
 license: mit
 ---
 
