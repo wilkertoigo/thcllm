@@ -24,7 +24,7 @@ print(f"[THC LLM] Carregando modelo {MODEL_ID}...")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, token=hf_token)
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
-    dtype=torch.float32,        # corrigido: era torch_dtype
+    dtype=torch.float32,
     device_map="cpu",
     token=hf_token,
 )
@@ -59,11 +59,14 @@ def chat_completions(req: ChatRequest):
     try:
         chat = [{"role": m.role, "content": m.content} for m in req.messages]
 
-        input_ids = tokenizer.apply_chat_template(
+        # ✅ return_dict=True para extrair input_ids corretamente no Gemma
+        tokenized = tokenizer.apply_chat_template(
             chat,
             return_tensors="pt",
             add_generation_prompt=True,
+            return_dict=True,
         )
+        input_ids = tokenized["input_ids"]
 
         with torch.no_grad():
             output = model.generate(
@@ -94,7 +97,6 @@ def chat_completions(req: ChatRequest):
             }
         }
     except Exception as e:
-        # Mostra o erro completo nos logs e retorna para o cliente
         err = traceback.format_exc()
         print(f"[ERRO] {err}")
         raise HTTPException(status_code=500, detail=str(e) + "\n" + err)
