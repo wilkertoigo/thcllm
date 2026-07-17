@@ -3,8 +3,15 @@ from pydantic import BaseModel
 from typing import List, Optional
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from huggingface_hub import login
+import os
 import time
 import uuid
+
+# ── Autenticação ──────────────────────────────────────────────────────────────
+hf_token = os.environ.get("HF_TOKEN")
+if hf_token:
+    login(token=hf_token)
 
 app = FastAPI(title="THC LLM API")
 
@@ -13,18 +20,19 @@ MODEL_ID = "google/gemma-3-1b-it"
 
 print(f"[THC LLM] Carregando modelo {MODEL_ID}...")
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, token=hf_token)
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
-    torch_dtype=torch.float32,   # CPU: float32
+    torch_dtype=torch.float32,
     device_map="cpu",
+    token=hf_token,
 )
 model.eval()
 print("[THC LLM] Modelo pronto!")
 
 # ── Schemas OpenAI-compatible ─────────────────────────────────────────────────
 class Message(BaseModel):
-    role: str          # system | user | assistant
+    role: str
     content: str
 
 class ChatRequest(BaseModel):
@@ -48,7 +56,6 @@ def list_models():
 @app.post("/v1/chat/completions")
 def chat_completions(req: ChatRequest):
     try:
-        # Monta o chat no formato Gemma
         chat = [{"role": m.role, "content": m.content} for m in req.messages]
 
         input_ids = tokenizer.apply_chat_template(
@@ -66,7 +73,6 @@ def chat_completions(req: ChatRequest):
                 pad_token_id=tokenizer.eos_token_id,
             )
 
-        # Pega só os tokens gerados (descarta o prompt)
         generated = output[0][input_ids.shape[-1]:]
         text = tokenizer.decode(generated, skip_special_tokens=True)
 
