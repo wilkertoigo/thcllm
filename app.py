@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Optional
 import torch
@@ -43,9 +45,10 @@ class ChatRequest(BaseModel):
     temperature: Optional[float] = 0.7
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 def root():
-    return {"status": "ok", "model": MODEL_ID}
+    with open("index.html", "r") as f:
+        return f.read()
 
 @app.get("/v1/models")
 def list_models():
@@ -59,7 +62,6 @@ def chat_completions(req: ChatRequest):
     try:
         chat = [{"role": m.role, "content": m.content} for m in req.messages]
 
-        # ✅ return_dict=True para extrair input_ids corretamente no Gemma
         tokenized = tokenizer.apply_chat_template(
             chat,
             return_tensors="pt",
