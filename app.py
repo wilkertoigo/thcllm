@@ -7,6 +7,7 @@ from huggingface_hub import login
 import os
 import time
 import uuid
+import traceback
 
 # ── Autenticação ──────────────────────────────────────────────────────────────
 hf_token = os.environ.get("HF_TOKEN")
@@ -23,14 +24,14 @@ print(f"[THC LLM] Carregando modelo {MODEL_ID}...")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, token=hf_token)
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
-    torch_dtype=torch.float32,
+    dtype=torch.float32,        # corrigido: era torch_dtype
     device_map="cpu",
     token=hf_token,
 )
 model.eval()
 print("[THC LLM] Modelo pronto!")
 
-# ── Schemas OpenAI-compatible ─────────────────────────────────────────────────
+# ── Schemas ───────────────────────────────────────────────────────────────────
 class Message(BaseModel):
     role: str
     content: str
@@ -68,7 +69,7 @@ def chat_completions(req: ChatRequest):
             output = model.generate(
                 input_ids,
                 max_new_tokens=req.max_tokens,
-                temperature=req.temperature,
+                temperature=req.temperature if req.temperature > 0 else None,
                 do_sample=req.temperature > 0,
                 pad_token_id=tokenizer.eos_token_id,
             )
@@ -93,4 +94,7 @@ def chat_completions(req: ChatRequest):
             }
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Mostra o erro completo nos logs e retorna para o cliente
+        err = traceback.format_exc()
+        print(f"[ERRO] {err}")
+        raise HTTPException(status_code=500, detail=str(e) + "\n" + err)
