@@ -5,6 +5,7 @@ RUN useradd -m -u 1000 user
 USER user
 ENV PATH="/home/user/.local/bin:$PATH"
 ENV HF_HOME="/home/user/.cache/huggingface"
+ENV HUGGING_FACE_HUB_TOKEN=$HF_TOKEN
 
 WORKDIR /app
 
