@@ -20,7 +20,7 @@ if hf_token:
 
 app = FastAPI(title="THC LLM API")
 
-# ── Registro de modelos de TEXTO disponíveis ──────────────────────────────────
+# ── Registro de modelos de TEXTO ──────────────────────────────────────────────
 TEXT_MODELS = {
     "gemma-1b": {
         "backend": "transformers",
@@ -38,48 +38,20 @@ TEXT_MODELS = {
         "backend": "gguf",
         "repo": "bartowski/Qwen2.5-14B-Instruct-GGUF",
         "file": "Qwen2.5-14B-Instruct-Q4_K_M.gguf",
-        "label": "Qwen2.5 14B (GGUF)",
+        "label": "Qwen2.5 14B GGUF",
         "desc": "🔥 Mais forte • mais lento (~9GB)",
-    },
-    "dolphin-qwen2-14b-uncensored": {
-        "backend": "gguf",
-        "repo": "cognitivecomputations/Dolphin-2.9.3-Qwen2-14B-GGUF",
-        "file": "Dolphin-2.9.3-Qwen2-14B-Q4_K_M.gguf",
-        "label": "Dolphin Qwen2 14B (Uncensored) 💎",
-        "desc": "🚫 Sem filtros • código+lógica • ~9GB GGUF",
-    },
-    "nous-hermes-3-11b": {
-        "backend": "gguf",
-        "repo": "bartowski/Nous-Hermes-3-Llama-3.2-11B-GGUF",
-        "file": "Nous-Hermes-3-Llama-3.2-11B-Q4_K_M.gguf",
-        "label": "Nous-Hermes-3 11B",
-        "desc": "🖊️ Roleplay/escrita criativa • ~7.2GB GGUF",
-    },
-    "dolphin-3.0-8b": {
-        "backend": "gguf",
-        "repo": "cognitivecomputations/Dolphin-3.0-Llama-3.1-8B-GGUF",
-        "file": "Dolphin-3.0-Llama-3.1-8B-Q4_K_M.gguf",
-        "label": "Dolphin 3.0 Llama3.1 8B 🐬",
-        "desc": "🥧 Geral uncensored • código+math+NSFW • ~5.4GB GGUF",
-    },
-    "llama3-8b-stheno-uncensored": {
-        "backend": "gguf",
-        "repo": "bartowski/Llama-3-8B-Stheno-v3.2-GGUF",
-        "file": "Llama-3-8B-Stheno-v3.2-Q4_K_M.gguf",
-        "label": "Stheno v3.2 8B (Uncensored King) 👑",
-        "desc": "🏆 Melhor uncensored médio • ~5GB GGUF",
     },
     "deepseek-r1-distill-14b": {
         "backend": "gguf",
         "repo": "bartowski/DeepSeek-R1-Distill-Qwen-14B-GGUF",
         "file": "DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf",
-        "label": "DeepSeek R1 Distill 14B 🔬",
-        "desc": "🧮 Raciocínio profundo • ~9GB GGUF",
+        "label": "DeepSeek R1 Distill 14B",
+        "desc": "🧮 Raciocínio avançado • ~9GB GGUF",
     },
 }
 DEFAULT_MODEL_KEY = "gemma-1b"
 
-# ── Cache de UM modelo de texto por vez (limite de RAM em CPU) ───────────────
+# ── Cache de UM modelo de texto por vez ───────────────────────────────────────
 _current = {"key": None, "tokenizer": None, "model": None, "backend": None}
 
 def unload_current():
@@ -185,7 +157,7 @@ class ImageRequest(BaseModel):
     steps: Optional[int] = 2
     size: Optional[int] = 512
 
-# ── Endpoints — Geral ──────────────────────────────────────────────────────────
+# ── Endpoints — Geral ────────────────────────__________
 @app.get("/", response_class=HTMLResponse)
 def root():
     with open("index.html", "r") as f:
@@ -201,7 +173,7 @@ def list_models():
         "image_model": {"id": IMAGE_MODEL_ID},
     }
 
-# ── Aplica os modos Fast/Médio/Thinking nos parâmetros de geração ────────────
+# ── Aplica os modos Fast/Médio/Thinking ────────────
 def apply_mode(mode, max_tokens, temperature, chat):
     do_sample = temperature > 0
     if mode == "fast":
@@ -217,7 +189,7 @@ def apply_mode(mode, max_tokens, temperature, chat):
     else:
         return max_tokens, do_sample, (temperature if do_sample else None), chat
 
-# ── Endpoints — Chat ────────────────────────────────────────────────────────────
+# ── Endpoints — Chat ────────────────────────
 @app.post("/v1/chat/completions")
 def chat_completions(req: ChatRequest):
     try:
@@ -298,7 +270,7 @@ def chat_completions(req: ChatRequest):
         print(f"[ERRO CHAT] {err}")
         raise HTTPException(status_code=500, detail=str(e) + "\n" + err)
 
-# ── Endpoints — Geração de Imagem ──────────────────────────────────────────────
+# ── Endpoints — Geração de Imagem ────────────
 @app.post("/v1/images/generations")
 def generate_image(req: ImageRequest):
     try:
