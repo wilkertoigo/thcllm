@@ -28,6 +28,20 @@ TEXT_MODELS = {
         "label": "Gemma 3 1B",
         "desc": "Rápido • conversação geral",
     },
+    "gemma-4b": {
+        "backend": "gguf",
+        "repo": "bartowski/google_gemma-3-4b-it-GGUF",
+        "file": "google_gemma-3-4b-it-Q4_K_M.gguf",
+        "label": "Gemma 3 4B",
+        "desc": "⚡ Rápido • bem mais forte que o 1B • ~2.5GB",
+    },
+    "gemma-12b": {
+        "backend": "gguf",
+        "repo": "bartowski/google_gemma-3-12b-it-GGUF",
+        "file": "google_gemma-3-12b-it-Q4_K_M.gguf",
+        "label": "Gemma 3 12B",
+        "desc": "🚀 Gemma mais forte • ~7.3GB",
+    },
     "qwen-coder-3b": {
         "backend": "transformers",
         "id": "Qwen/Qwen2.5-Coder-3B-Instruct",
