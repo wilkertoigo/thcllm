@@ -10,3 +10,4 @@ safetensors
 pillow
 huggingface_hub
 llama-cpp-python
+
