@@ -1,15 +1,19 @@
-# HF Docker Space — THC LLM (Gemma 3 1B, CPU)
+# HF Docker Space — THC LLM
 FROM python:3.11-slim
 
 RUN useradd -m -u 1000 user
 USER user
 ENV PATH="/home/user/.local/bin:$PATH"
 ENV HF_HOME="/home/user/.cache/huggingface"
-ENV HUGGING_FACE_HUB_TOKEN=$HF_TOKEN
 
 WORKDIR /app
 
 COPY --chown=user requirements.txt .
+
+# Instala llama-cpp-python usando wheel pré-compilada pra CPU (evita build lento/travando)
+RUN pip install --no-cache-dir llama-cpp-python \
+    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+
 RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
 COPY --chown=user . .
