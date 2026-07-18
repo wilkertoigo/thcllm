@@ -16,13 +16,10 @@ RUN pip install --no-cache-dir llama-cpp-python \
     --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 
 # Instala resto das libs (transformers, fastapi, etc.)
-RUN pip install --no-cache-dir uv && \
-    pip install --no-cache-dir --upgrade -r requirements.txt
+RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
 # Copia o código do app
 COPY --chown=user . .
 
-# Aplica
 EXPOSE 7860
-CMD```dockerfile
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
