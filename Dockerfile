@@ -1,4 +1,4 @@
-# HF Docker Space — THC LLM (CPU Basic)
+# HF Docker Space — THC LLM
 FROM python:3.11-slim
 
 # Prepara usuário não-root
@@ -15,12 +15,14 @@ COPY --chown=user requirements.txt .
 RUN pip install --no-cache-dir llama-cpp-python \
     --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 
-# Instala resto das libs (transformers, fastapi, etc)
+# Instala resto das libs (transformers, fastapi, etc.)
 RUN pip install --no-cache-dir uv && \
     pip install --no-cache-dir --upgrade -r requirements.txt
 
+# Copia o código do app
 COPY --chown=user . .
 
-# O vervoranteocum
+# Aplica
 EXPOSE 7860
+CMD```dockerfile
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
