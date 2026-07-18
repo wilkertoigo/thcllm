@@ -34,6 +34,27 @@ TEXT_MODELS = {
         "label": "Qwen2.5-Coder 3B",
         "desc": "Especialista em código",
     },
+    "llama32-3b": {
+        "backend": "gguf",
+        "repo": "bartowski/Llama-3.2-3B-Instruct-GGUF",
+        "file": "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+        "label": "Llama 3.2 3B",
+        "desc": "⚡ Rápido • teste e bate-papo • ~2GB",
+    },
+    "llama31-8b": {
+        "backend": "gguf",
+        "repo": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
+        "file": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+        "label": "Llama 3.1 8B",
+        "desc": "Código + matemática • ~5GB",
+    },
+    "hermes3-8b": {
+        "backend": "gguf",
+        "repo": "NousResearch/Hermes-3-Llama-3.1-8B-GGUF",
+        "file": "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf",
+        "label": "Nous-Hermes 3 8B",
+        "desc": "Escrita criativa • ~5GB",
+    },
     "qwen-14b-gguf": {
         "backend": "gguf",
         "repo": "bartowski/Qwen2.5-14B-Instruct-GGUF",
