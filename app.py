@@ -72,6 +72,14 @@ TEXT_MODELS = {
 }
 DEFAULT_MODEL_KEY = "gemma-1b"
 
+# ── Instrução de idioma — sempre aplicada, em todos os modelos e modos ───────
+LANGUAGE_INSTRUCTION = (
+    "Responda SEMPRE em português do Brasil, independentemente do idioma da "
+    "pergunta. Nunca responda em chinês, inglês, japonês ou qualquer outro "
+    "idioma, mesmo que seu raciocínio interno use outro idioma — a resposta "
+    "final deve ser 100% em português do Brasil."
+)
+
 # ── Cache de UM modelo de texto por vez ───────────────────────────────────────
 _current = {"key": None, "tokenizer": None, "model": None, "backend": None}
 
@@ -116,7 +124,7 @@ def get_text_model(key: str):
             repo = cfg['repo']
             filename = cfg['file']
             print(f"[THC LLM] Carregando GGUF: {repo}/{filename}...")
-            
+
             llm = Llama.from_pretrained(
                 repo_id=repo,
                 filename=filename,
@@ -178,7 +186,7 @@ class ImageRequest(BaseModel):
     steps: Optional[int] = 2
     size: Optional[int] = 512
 
-# ── Endpoints — Geral ────────────────────────__________
+# ── Endpoints — Geral ──────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 def root():
     with open("index.html", "r") as f:
@@ -194,7 +202,7 @@ def list_models():
         "image_model": {"id": IMAGE_MODEL_ID},
     }
 
-# ── Aplica os modos Fast/Médio/Thinking ────────────
+# ── Aplica os modos Fast/Médio/Thinking ────────────────────────────────────────
 def apply_mode(mode, max_tokens, temperature, chat):
     do_sample = temperature > 0
     if mode == "fast":
@@ -203,20 +211,25 @@ def apply_mode(mode, max_tokens, temperature, chat):
         t = min(temperature, 0.4) if temperature > 0 else 0.3
         chat = [{
             "role": "system",
-            "content": "Pense com cuidado, passo a passo, antes de responder. "
-                        "Explique seu raciocínio brevemente e depois dê a resposta final de forma clara."
+            "content": LANGUAGE_INSTRUCTION + " Pense com cuidado, passo a passo, "
+                        "antes de responder. Explique seu raciocínio brevemente e "
+                        "depois dê a resposta final de forma clara."
         }] + chat
         return max(max_tokens, 768), True, t, chat
     else:
         return max_tokens, do_sample, (temperature if do_sample else None), chat
 
-# ── Endpoints — Chat ────────────────────────
+# ── Endpoints — Chat ────────────────────────────────────────────────────────────
 @app.post("/v1/chat/completions")
 def chat_completions(req: ChatRequest):
     try:
         state = get_text_model(req.model)
         backend = state["backend"]
         chat = [{"role": m.role, "content": m.content} for m in req.messages]
+
+        # ── Garante idioma PT-BR em qualquer modo, pra qualquer modelo ───────
+        if req.mode != "thinking":
+            chat = [{"role": "system", "content": LANGUAGE_INSTRUCTION}] + chat
 
         max_tokens, do_sample, temperature, chat = apply_mode(
             req.mode, req.max_tokens, req.temperature, chat
@@ -291,7 +304,7 @@ def chat_completions(req: ChatRequest):
         print(f"[ERRO CHAT] {err}")
         raise HTTPException(status_code=500, detail=str(e) + "\n" + err)
 
-# ── Endpoints — Geração de Imagem ────────────
+# ── Endpoints — Geração de Imagem ──────────────────────────────────────────────
 @app.post("/v1/images/generations")
 def generate_image(req: ImageRequest):
     try:
