@@ -43,6 +43,42 @@ TEXT_MODELS = {
         "label": "Qwen2.5 14B (GGUF)",
         "desc": "🔥 Mais forte • mais lento (~9GB)",
     },
+    # MODELOS UNCENSORED
+    "qwen2.5-14b-uncensored": {
+        "backend": "gguf",
+        "repo": "bartowski/Qwen2.5-14B-Instruct-Uncensored-GGUF",
+        "file": "Qwen2.5-14B-Instruct-Uncensored-Q4_K_M.gguf",
+        "label": "Qwen2.5 14B Uncensored 🔥💎",
+        "desc": "💅 Mais forte uncensored • código+lógica • ~9GB GGUF",
+    },
+    "nous-hermes-11b-uncensored": {
+        "backend": "gguf",
+        "repo": "nousresearch/Nous-Hermes-3-Llama-3.2-11B-GGUF",
+        "file": "Nous-Hermes-3-Llama-3.2-11B-Q4_K_M.gguf",
+        "label": "Nous-Hermes-3 11B Uncensored",
+        "desc": "🖊️ Roleplay/escrita criativa • ~7.2GB GGUF",
+    },
+    "dolphin-3.0-8b-uncensored": {
+        "backend": "gguf",
+        "repo": "cognitivecomputations/dolphin-3.0-llama3.1-8b-GGUF",
+        "file": "dolphin-3.0-llama3.1-8b-Q4_K_M.gguf",
+        "label": "Dolphin 3.0 (Llama 3.1 8B) Uncensored 🐬",
+        "desc": "🥧 Geral uncensored • código+math+NSFW • ~5.4GB GGUF",
+    },
+    "llama3-2-3b-uncensored": {
+        "backend": "gguf",
+        "repo": "bartowski/Llama-3.2-3B-Instruct-Uncensored-GGUF",
+        "file": "Llama-3.2-3B-Instruct-Uncensored-Q4_K_M.gguf",
+        "label": "Llama3.2 3B Uncensored",
+        "desc": "🧪 Rápido teste uncensored • ~2.1GB GGUF",
+    },
+    "deepseek-r1-14b-uncensored": {
+        "backend": "gguf",
+        "repo": "deepseek-ai/DeepSeek-R1-Uncensored-14B-GGUF",
+        "file": "DeepSeek-R1-Uncensored-14B-Q4_K_M.gguf",
+        "label": "DeepSeek-R1 14B Uncensored 🔬",
+        "desc": "🧮 Lógica ciência explicações • ~8.7GB GGUF",
+    },
 }
 DEFAULT_MODEL_KEY = "gemma-1b"
 
@@ -87,7 +123,7 @@ def get_text_model(key: str):
 
         elif backend == "gguf":
             from llama_cpp import Llama
-            print(f"[THC LLM] Carregando modelo (GGUF): {cfg['repo']}/{cfg['file']}... (primeira vez baixa ~9GB)")
+            print(f"[THC LLM] Carregando modelo (GGUF): {cfg['repo']}/{cfg['file']}... (~9GB na primeira vez)")
             llm = Llama.from_pretrained(
                 repo_id=cfg["repo"],
                 filename=cfg["file"],
@@ -102,18 +138,18 @@ def get_text_model(key: str):
 
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
         unload_current()
-        raise
+        raise HTTPException(status_code=500, detail=f"Falha ao carregar modelo: {str(e)}") from e
 
-    print(f"[THC LLM] Modelo {key} pronto!")
+    print(f"[THC LLM] Modelo {key} carregado!")
     return _current
 
 # Pré-carrega o modelo padrão no boot
 print(f"[THC LLM] Pré-carregando modelo padrão ({DEFAULT_MODEL_KEY})...")
 get_text_model(DEFAULT_MODEL_KEY)
 
-# ── Modelo de IMAGEM — carregado sob demanda ──────────────────────────────────
+# ── Modelo de IMAGEM — carregado sob demanda ────────────────────────────────────────
 IMAGE_MODEL_ID = "stabilityai/sd-turbo"
 image_pipeline = None
 
@@ -149,7 +185,7 @@ class ImageRequest(BaseModel):
     steps: Optional[int] = 2
     size: Optional[int] = 512
 
-# ── Endpoints — Geral ──────────────────────────────────────────────────────────
+# ── Endpoints — Geral ─────────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 def root():
     with open("index.html", "r") as f:
@@ -175,13 +211,13 @@ def apply_mode(mode, max_tokens, temperature, chat):
         chat = [{
             "role": "system",
             "content": "Pense com cuidado, passo a passo, antes de responder. "
-                        "Explique seu raciocínio brevemente e depois dê a resposta final de forma clara."
+                       "Explique seu raciocínio brevemente e depois dê a resposta final de forma clara."
         }] + chat
         return max(max_tokens, 768), True, t, chat
     else:
         return max_tokens, do_sample, (temperature if do_sample else None), chat
 
-# ── Endpoints — Chat ────────────────────────────────────────────────────────────
+# ── Endpoints — Chat ──────────────────────────────────────────────────────────────
 @app.post("/v1/chat/completions")
 def chat_completions(req: ChatRequest):
     try:
@@ -236,7 +272,7 @@ def chat_completions(req: ChatRequest):
             raise HTTPException(status_code=500, detail="Backend inválido")
 
         elapsed = time.time() - t0
-        print(f"[THC LLM] Resposta gerada em {elapsed:.1f}s ({backend})")
+        print(f"[THC LLM] Resposta gerada em {elapsed:.1f}s ({backend}, modelo={req.model})")
 
         return {
             "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
@@ -262,7 +298,7 @@ def chat_completions(req: ChatRequest):
         print(f"[ERRO CHAT] {err}")
         raise HTTPException(status_code=500, detail=str(e) + "\n" + err)
 
-# ── Endpoints — Geração de Imagem ──────────────────────────────────────────────
+# ── Endpoints — Geração de Imagem ────────────────────────────────────────────────
 @app.post("/v1/images/generations")
 def generate_image(req: ImageRequest):
     try:
