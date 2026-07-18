@@ -1,6 +1,6 @@
 fastapi
 uvicorn[standard]
-transformers>=4.40.0
+transformers>=4.51.0
 torch
 accelerate
 sentencepiece
