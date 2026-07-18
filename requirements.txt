@@ -5,3 +5,6 @@ torch
 accelerate
 sentencepiece
 protobuf
+diffusers
+safetensors
+pillow
