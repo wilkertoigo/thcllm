@@ -47,28 +47,36 @@ def get_text_model(key: str):
     if key not in TEXT_MODELS:
         raise HTTPException(status_code=400, detail=f"Modelo desconhecido: {key}")
 
-    if _current["key"] == key and _current["model"] is not None:
+    if _current.get("key") == key and _current.get("model") is not None:
         return _current["tokenizer"], _current["model"]
 
-    # Descarrega o modelo anterior pra liberar RAM
-    if _current["model"] is not None:
+    # Descarrega o modelo anterior pra liberar RAM (sem apagar as chaves do dict)
+    if _current.get("model") is not None:
         print(f"[THC LLM] Descarregando modelo anterior ({_current['key']})...")
-        del _current["model"]
-        del _current["tokenizer"]
+        _current["model"] = None
+        _current["tokenizer"] = None
+        _current["key"] = None
         gc.collect()
 
     model_id = TEXT_MODELS[key]["id"]
     print(f"[THC LLM] Carregando modelo de texto: {model_id}...")
 
-    tokenizer = AutoTokenizer.from_pretrained(model_id, token=hf_token, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        dtype=torch.float32,
-        device_map="cpu",
-        token=hf_token,
-        trust_remote_code=True,
-    )
-    model.eval()
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_id, token=hf_token, trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            dtype=torch.float32,
+            device_map="cpu",
+            token=hf_token,
+            trust_remote_code=True,
+        )
+        model.eval()
+    except Exception:
+        # Garante que o estado fique limpo mesmo se der erro no meio do load
+        _current["key"] = None
+        _current["tokenizer"] = None
+        _current["model"] = None
+        raise
 
     _current["key"] = key
     _current["tokenizer"] = tokenizer
