@@ -21,68 +21,93 @@ if hf_token:
 app = FastAPI(title="THC LLM API")
 
 # ── Registro de modelos de TEXTO disponíveis ──────────────────────────────────
+# backend "transformers" = modelo padrão HF (float32)
+# backend "gguf"         = modelo quantizado via llama.cpp (mais leve em RAM)
 TEXT_MODELS = {
     "gemma-1b": {
+        "backend": "transformers",
         "id": "google/gemma-3-1b-it",
         "label": "Gemma 3 1B",
         "desc": "Rápido • conversação geral",
     },
     "qwen-coder-3b": {
+        "backend": "transformers",
         "id": "Qwen/Qwen2.5-Coder-3B-Instruct",
         "label": "Qwen2.5-Coder 3B",
         "desc": "Especialista em código",
     },
-    "phi4-mini": {
-        "id": "microsoft/Phi-4-mini-instruct",
-        "label": "Phi-4 Mini",
-        "desc": "Código + raciocínio",
+    "qwen-14b-gguf": {
+        "backend": "gguf",
+        "repo": "bartowski/Qwen2.5-14B-Instruct-GGUF",
+        "file": "Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+        "label": "Qwen2.5 14B (GGUF)",
+        "desc": "🔥 Mais forte • mais lento (~9GB)",
     },
 }
 DEFAULT_MODEL_KEY = "gemma-1b"
 
 # ── Cache de UM modelo de texto por vez (limite de RAM em CPU) ───────────────
-_current = {"key": None, "tokenizer": None, "model": None}
+_current = {"key": None, "tokenizer": None, "model": None, "backend": None}
+
+def unload_current():
+    if _current.get("model") is not None:
+        print(f"[THC LLM] Descarregando modelo anterior ({_current['key']})...")
+    _current["key"] = None
+    _current["tokenizer"] = None
+    _current["model"] = None
+    _current["backend"] = None
+    gc.collect()
 
 def get_text_model(key: str):
     if key not in TEXT_MODELS:
         raise HTTPException(status_code=400, detail=f"Modelo desconhecido: {key}")
 
     if _current.get("key") == key and _current.get("model") is not None:
-        return _current["tokenizer"], _current["model"]
+        return _current
 
-    # Descarrega o modelo anterior pra liberar RAM (sem apagar as chaves do dict)
-    if _current.get("model") is not None:
-        print(f"[THC LLM] Descarregando modelo anterior ({_current['key']})...")
-        _current["model"] = None
-        _current["tokenizer"] = None
-        _current["key"] = None
-        gc.collect()
+    unload_current()
 
-    model_id = TEXT_MODELS[key]["id"]
-    print(f"[THC LLM] Carregando modelo de texto: {model_id}...")
+    cfg = TEXT_MODELS[key]
+    backend = cfg["backend"]
 
     try:
-        tokenizer = AutoTokenizer.from_pretrained(model_id, token=hf_token, trust_remote_code=True)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            dtype=torch.float32,
-            device_map="cpu",
-            token=hf_token,
-            trust_remote_code=True,
-        )
-        model.eval()
+        if backend == "transformers":
+            model_id = cfg["id"]
+            print(f"[THC LLM] Carregando modelo (transformers): {model_id}...")
+            tokenizer = AutoTokenizer.from_pretrained(model_id, token=hf_token, trust_remote_code=True)
+            model = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                dtype=torch.float32,
+                device_map="cpu",
+                token=hf_token,
+                trust_remote_code=True,
+            )
+            model.eval()
+            _current.update({"key": key, "tokenizer": tokenizer, "model": model, "backend": "transformers"})
+
+        elif backend == "gguf":
+            from llama_cpp import Llama
+            print(f"[THC LLM] Carregando modelo (GGUF): {cfg['repo']}/{cfg['file']}... (primeira vez baixa ~9GB)")
+            llm = Llama.from_pretrained(
+                repo_id=cfg["repo"],
+                filename=cfg["file"],
+                n_ctx=4096,
+                n_threads=2,
+                verbose=False,
+            )
+            _current.update({"key": key, "tokenizer": None, "model": llm, "backend": "gguf"})
+
+        else:
+            raise HTTPException(status_code=500, detail=f"Backend desconhecido: {backend}")
+
+    except HTTPException:
+        raise
     except Exception:
-        # Garante que o estado fique limpo mesmo se der erro no meio do load
-        _current["key"] = None
-        _current["tokenizer"] = None
-        _current["model"] = None
+        unload_current()
         raise
 
-    _current["key"] = key
-    _current["tokenizer"] = tokenizer
-    _current["model"] = model
-    print(f"[THC LLM] Modelo {model_id} pronto!")
-    return tokenizer, model
+    print(f"[THC LLM] Modelo {key} pronto!")
+    return _current
 
 # Pré-carrega o modelo padrão no boot
 print(f"[THC LLM] Pré-carregando modelo padrão ({DEFAULT_MODEL_KEY})...")
@@ -140,54 +165,78 @@ def list_models():
         "image_model": {"id": IMAGE_MODEL_ID},
     }
 
+# ── Aplica os modos Fast/Médio/Thinking nos parâmetros de geração ────────────
+def apply_mode(mode, max_tokens, temperature, chat):
+    do_sample = temperature > 0
+    if mode == "fast":
+        return min(max_tokens, 256), False, None, chat
+    elif mode == "thinking":
+        t = min(temperature, 0.4) if temperature > 0 else 0.3
+        chat = [{
+            "role": "system",
+            "content": "Pense com cuidado, passo a passo, antes de responder. "
+                        "Explique seu raciocínio brevemente e depois dê a resposta final de forma clara."
+        }] + chat
+        return max(max_tokens, 768), True, t, chat
+    else:
+        return max_tokens, do_sample, (temperature if do_sample else None), chat
+
 # ── Endpoints — Chat ────────────────────────────────────────────────────────────
 @app.post("/v1/chat/completions")
 def chat_completions(req: ChatRequest):
     try:
-        tokenizer, model = get_text_model(req.model)
-
+        state = get_text_model(req.model)
+        backend = state["backend"]
         chat = [{"role": m.role, "content": m.content} for m in req.messages]
 
-        # ── Ajustes por modo ──────────────────────────────────────────────────
-        max_tokens = req.max_tokens
-        do_sample = req.temperature > 0
-        temperature = req.temperature if req.temperature > 0 else None
-
-        if req.mode == "fast":
-            max_tokens = min(req.max_tokens, 256)
-            do_sample = False
-            temperature = None
-        elif req.mode == "thinking":
-            max_tokens = max(req.max_tokens, 768)
-            do_sample = True
-            temperature = min(req.temperature, 0.4) if req.temperature > 0 else 0.3
-            chat = [{
-                "role": "system",
-                "content": "Pense com cuidado, passo a passo, antes de responder. "
-                            "Explique seu raciocínio brevemente e depois dê a resposta final de forma clara."
-            }] + chat
-
-        tokenized = tokenizer.apply_chat_template(
-            chat,
-            return_tensors="pt",
-            add_generation_prompt=True,
-            return_dict=True,
+        max_tokens, do_sample, temperature, chat = apply_mode(
+            req.mode, req.max_tokens, req.temperature, chat
         )
-        input_ids = tokenized["input_ids"]
 
-        gen_kwargs = dict(
-            max_new_tokens=max_tokens,
-            do_sample=do_sample,
-            pad_token_id=tokenizer.eos_token_id,
-        )
-        if do_sample and temperature:
-            gen_kwargs["temperature"] = temperature
+        t0 = time.time()
 
-        with torch.no_grad():
-            output = model.generate(input_ids, **gen_kwargs)
+        if backend == "transformers":
+            tokenizer = state["tokenizer"]
+            model = state["model"]
 
-        generated = output[0][input_ids.shape[-1]:]
-        text = tokenizer.decode(generated, skip_special_tokens=True)
+            tokenized = tokenizer.apply_chat_template(
+                chat, return_tensors="pt", add_generation_prompt=True, return_dict=True,
+            )
+            input_ids = tokenized["input_ids"]
+
+            gen_kwargs = dict(
+                max_new_tokens=max_tokens,
+                do_sample=do_sample,
+                pad_token_id=tokenizer.eos_token_id,
+            )
+            if do_sample and temperature:
+                gen_kwargs["temperature"] = temperature
+
+            with torch.no_grad():
+                output = model.generate(input_ids, **gen_kwargs)
+
+            generated = output[0][input_ids.shape[-1]:]
+            text = tokenizer.decode(generated, skip_special_tokens=True)
+            prompt_tokens = input_ids.shape[-1]
+            completion_tokens = len(generated)
+
+        elif backend == "gguf":
+            llm = state["model"]
+            result = llm.create_chat_completion(
+                messages=chat,
+                max_tokens=max_tokens,
+                temperature=temperature if temperature else 0.0,
+            )
+            text = result["choices"][0]["message"]["content"]
+            usage = result.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+
+        else:
+            raise HTTPException(status_code=500, detail="Backend inválido")
+
+        elapsed = time.time() - t0
+        print(f"[THC LLM] Resposta gerada em {elapsed:.1f}s ({backend})")
 
         return {
             "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
@@ -201,9 +250,9 @@ def chat_completions(req: ChatRequest):
                 "finish_reason": "stop"
             }],
             "usage": {
-                "prompt_tokens": input_ids.shape[-1],
-                "completion_tokens": len(generated),
-                "total_tokens": input_ids.shape[-1] + len(generated),
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": prompt_tokens + completion_tokens,
             }
         }
     except HTTPException:
@@ -218,7 +267,6 @@ def chat_completions(req: ChatRequest):
 def generate_image(req: ImageRequest):
     try:
         pipe = get_image_pipeline()
-
         t0 = time.time()
         result = pipe(
             prompt=req.prompt,
