@@ -158,6 +158,35 @@
     }
     #stats-bar span { color: var(--accent); font-weight: 600; }
 
+    /* ══════════ QUICK BAR (Model + Mode) ══════════ */
+    #quick-bar {
+      display: flex; gap: 8px; align-items: center;
+      padding: 8px 12px; background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap; flex-shrink: 0;
+    }
+
+    #model-select {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); border-radius: 8px; padding: 7px 10px;
+      font-size: 12px; outline: none; cursor: pointer; flex: 1; min-width: 140px;
+    }
+    #model-select:focus { border-color: var(--accent); }
+
+    .mode-pills { display: flex; gap: 4px; flex-shrink: 0; }
+    .mode-pill {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+      border-radius: 8px; padding: 7px 10px; font-size: 11px; cursor: pointer;
+      transition: all 0.15s; white-space: nowrap;
+    }
+    .mode-pill.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+
+    .model-loading-hint {
+      font-size: 10px; color: var(--muted); padding: 0 12px 6px;
+      display: none; font-style: italic; background: var(--surface); flex-shrink: 0;
+    }
+    .model-loading-hint.show { display: block; }
+
     /* ══════════ CHAT ══════════ */
     #chat {
       flex: 1; overflow-y: auto; padding: 16px;
@@ -354,6 +383,9 @@
       #image-gallery { grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; }
       .image-controls { flex-direction: column; align-items: stretch; }
       #generate-img-btn { width: 100%; }
+      #quick-bar { padding: 8px; }
+      #model-select { font-size: 11px; }
+      .mode-pill { padding: 6px 8px; font-size: 10px; }
     }
   </style>
 </head>
@@ -445,6 +477,19 @@
 
   <!-- CHAT VIEW -->
   <div id="chat-view" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+
+    <div id="quick-bar">
+      <select id="model-select" onchange="onModelChange()">
+        <option value="gemma-1b">Gemma 3 1B</option>
+      </select>
+      <div class="mode-pills">
+        <button class="mode-pill" data-mode="fast" onclick="setMode('fast')">⚡ Fast</button>
+        <button class="mode-pill active" data-mode="medium" onclick="setMode('medium')">⚖️ Médio</button>
+        <button class="mode-pill" data-mode="thinking" onclick="setMode('thinking')">🧠 Thinking</button>
+      </div>
+    </div>
+    <div class="model-loading-hint" id="model-loading-hint">⏳ Trocando modelo — a primeira resposta pode demorar mais...</div>
+
     <div id="chat">
       <div class="welcome">
         <h2>THC LLM 🎙️</h2>
@@ -524,6 +569,9 @@ let ttsEnabled = true;
 let recognition = null;
 let isListening = false;
 let currentUtterance = null;
+let currentMode = 'medium';
+let currentModelKey = 'gemma-1b';
+let modelJustChanged = false;
 
 // ── Sidebar (desktop collapse / mobile drawer) ──────────────────────────────
 function toggleSidebar() {
@@ -548,6 +596,46 @@ function switchMode(mode) {
   document.getElementById('chat-view').style.display = mode==='chat' ? 'flex' : 'none';
   document.getElementById('image-view').classList.toggle('active', mode==='image');
   if (mode === 'image') stopSpeaking();
+}
+
+// ── Modelos e Modo de raciocínio (Fast/Médio/Thinking) ───────────────────────
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-pill').forEach(el => {
+    el.classList.toggle('active', el.dataset.mode === mode);
+  });
+}
+
+async function loadModelList() {
+  try {
+    const res = await fetch('/v1/models');
+    const data = await res.json();
+    const sel = document.getElementById('model-select');
+    sel.innerHTML = '';
+    data.text_models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.key;
+      opt.textContent = `${m.label} — ${m.desc}`;
+      if (m.active) { opt.selected = true; currentModelKey = m.key; }
+      sel.appendChild(opt);
+    });
+    updateModelLabel();
+  } catch (err) {
+    console.error('Erro ao carregar modelos:', err);
+  }
+}
+
+function onModelChange() {
+  currentModelKey = document.getElementById('model-select').value;
+  modelJustChanged = true;
+  document.getElementById('model-loading-hint').classList.add('show');
+  updateModelLabel();
+}
+
+function updateModelLabel() {
+  const sel = document.getElementById('model-select');
+  const label = sel.options[sel.selectedIndex]?.textContent.split(' — ')[0] || '';
+  document.getElementById('model-label').textContent = `${label} • CPU`;
 }
 
 // ── TTS ───────────────────────────────────────────────────────────────────────
@@ -824,6 +912,8 @@ async function sendMessage() {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
         messages,
+        model: currentModelKey,
+        mode: currentMode,
         max_tokens: parseInt(document.getElementById('max-tokens').value),
         temperature: parseFloat(document.getElementById('temperature').value),
       })
@@ -850,6 +940,11 @@ async function sendMessage() {
     appendMessage('assistant', reply, tokMeta);
     updateStats(usage.prompt_tokens||0, usage.completion_tokens||0, ms);
     speak(reply);
+
+    if (modelJustChanged) {
+      document.getElementById('model-loading-hint').classList.remove('show');
+      modelJustChanged = false;
+    }
 
   } catch(err) {
     thinkingWrapper.remove();
@@ -928,6 +1023,7 @@ function downloadImage(b64, prompt) {
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 renderConvList();
+loadModelList();
 if (isMobile) document.getElementById('sidebar').classList.add('collapsed');
 </script>
 </body>
