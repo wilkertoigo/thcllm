@@ -2,10 +2,13 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>THC LLM</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
     :root {
       --bg:       #0a0a0a;
@@ -17,111 +20,134 @@
       --text:     #e8e8e8;
       --muted:    #555555;
       --danger:   #ff4d4d;
+      --sidebar-w: 260px;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
     }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
-      height: 100vh;
       display: flex;
-      overflow: hidden;
+      height: 100vh;
+      height: 100dvh; /* mobile viewport correto (barra do browser) */
     }
 
-    /* ── SIDEBAR ── */
+    button, .conv-item, .suggestion { -webkit-user-select: none; user-select: none; }
+
+    /* ══════════ SIDEBAR ══════════ */
     #sidebar {
-      width: 260px; min-width: 260px;
+      width: var(--sidebar-w); min-width: var(--sidebar-w);
       background: var(--surface);
       border-right: 1px solid var(--border);
       display: flex; flex-direction: column;
-      transition: width 0.3s, min-width 0.3s;
+      transition: margin-left 0.3s ease;
+      z-index: 100;
     }
-    #sidebar.collapsed { width: 0; min-width: 0; overflow: hidden; }
+    #sidebar.collapsed { margin-left: calc(-1 * var(--sidebar-w)); }
 
-    .sidebar-header {
-      padding: 20px 16px 12px;
-      border-bottom: 1px solid var(--border);
-    }
+    .sidebar-header { padding: 20px 16px 12px; border-bottom: 1px solid var(--border); }
     .sidebar-header h2 { font-size: 15px; font-weight: 700; color: var(--accent); margin-bottom: 12px; }
 
     #new-chat-btn {
       width: 100%; background: var(--accent); color: #000;
-      border: none; border-radius: 8px; padding: 9px 12px;
+      border: none; border-radius: 8px; padding: 10px 12px;
       font-size: 13px; font-weight: 600; cursor: pointer;
       display: flex; align-items: center; gap: 6px;
     }
-    #new-chat-btn:hover { background: var(--accent2); }
+    #new-chat-btn:active { background: var(--accent2); }
 
-    #conversations { flex: 1; overflow-y: auto; padding: 8px; }
+    #conversations { flex: 1; overflow-y: auto; padding: 8px; -webkit-overflow-scrolling: touch; }
 
     .conv-item {
-      padding: 10px 12px; border-radius: 8px; cursor: pointer;
+      padding: 12px; border-radius: 8px; cursor: pointer;
       font-size: 13px; display: flex; align-items: center;
       justify-content: space-between; gap: 8px;
       transition: background 0.15s; margin-bottom: 2px;
     }
-    .conv-item:hover { background: var(--surface2); }
-    .conv-item.active { background: var(--surface2); border-left: 2px solid var(--accent); }
+    .conv-item:active, .conv-item.active { background: var(--surface2); }
+    .conv-item.active { border-left: 2px solid var(--accent); }
     .conv-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
     .conv-delete {
-      opacity: 0; background: none; border: none; color: var(--danger);
-      cursor: pointer; font-size: 14px; padding: 2px 4px; border-radius: 4px;
+      background: none; border: none; color: var(--danger);
+      cursor: pointer; font-size: 16px; padding: 4px 8px; border-radius: 4px;
+      opacity: 0.6;
     }
-    .conv-item:hover .conv-delete { opacity: 1; }
 
-    /* ── SETTINGS ── */
+    /* ══════════ SETTINGS ══════════ */
     .settings-panel {
       padding: 12px 16px; border-top: 1px solid var(--border);
       display: flex; flex-direction: column; gap: 14px;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
     }
     .settings-panel h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
 
-    .slider-group label {
-      display: flex; justify-content: space-between;
-      font-size: 12px; color: var(--text); margin-bottom: 6px;
-    }
+    .slider-group label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
     .slider-group label span { color: var(--accent); font-weight: 600; }
-    input[type=range] { width: 100%; accent-color: var(--accent); height: 4px; }
+    input[type=range] { width: 100%; accent-color: var(--accent); height: 20px; }
 
     .settings-panel textarea {
       width: 100%; background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 8px; color: var(--text); font-size: 12px;
+      border-radius: 8px; color: var(--text); font-size: 13px;
       padding: 8px 10px; resize: none; outline: none; height: 72px; font-family: inherit;
     }
     .settings-panel textarea:focus { border-color: var(--accent); }
 
-    .toggle-row {
-      display: flex; align-items: center; justify-content: space-between;
-      font-size: 12px; color: var(--text);
-    }
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
     .toggle {
-      width: 36px; height: 20px; background: var(--border);
+      width: 40px; height: 24px; background: var(--border);
       border-radius: 20px; position: relative; cursor: pointer;
       transition: background 0.2s; border: none; flex-shrink: 0;
     }
     .toggle.on { background: var(--accent); }
     .toggle::after {
       content: ''; position: absolute; top: 2px; left: 2px;
-      width: 16px; height: 16px; border-radius: 50%; background: #fff;
+      width: 20px; height: 20px; border-radius: 50%; background: #fff;
       transition: left 0.2s;
     }
     .toggle.on::after { left: 18px; }
 
-    /* ── MAIN ── */
-    #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    select {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); border-radius: 8px; padding: 8px; font-size: 13px; outline: none;
+    }
+
+    .ios-notice {
+      font-size: 11px; color: #d9a441; background: #2a2010;
+      border: 1px solid #4a3a1a; border-radius: 8px; padding: 8px 10px;
+      display: none; line-height: 1.5;
+    }
+    .ios-notice.show { display: block; }
+
+    /* ══════════ SIDEBAR OVERLAY (mobile) ══════════ */
+    #overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5); z-index: 90;
+    }
+    #overlay.show { display: block; }
+
+    /* ══════════ MAIN ══════════ */
+    #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 
     #topbar {
       background: var(--surface); border-bottom: 1px solid var(--border);
-      padding: 12px 20px; display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px; display: flex; align-items: center; gap: 10px;
+      flex-shrink: 0;
     }
-    #toggle-sidebar { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; border-radius: 6px; }
-    #toggle-sidebar:hover { color: var(--accent); }
-    .topbar-info { flex: 1; }
-    .topbar-info h1 { font-size: 15px; font-weight: 700; color: var(--accent); }
-    .topbar-info p { font-size: 11px; color: var(--muted); }
+    #toggle-sidebar {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 20px; border-radius: 6px; padding: 6px; flex-shrink: 0;
+    }
+    .topbar-info { flex: 1; min-width: 0; }
+    .topbar-info h1 { font-size: 14px; font-weight: 700; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .topbar-info p { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     .status-dot {
-      width: 8px; height: 8px; border-radius: 50%;
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
       background: var(--accent); box-shadow: 0 0 6px var(--accent);
       animation: pulse 2s infinite;
     }
@@ -129,28 +155,30 @@
 
     #stats-bar {
       background: var(--surface2); border-bottom: 1px solid var(--border);
-      padding: 6px 20px; display: flex; gap: 20px; font-size: 11px; color: var(--muted);
-      flex-wrap: wrap;
+      padding: 6px 16px; display: flex; gap: 16px; font-size: 10px; color: var(--muted);
+      flex-wrap: wrap; flex-shrink: 0; overflow-x: auto; white-space: nowrap;
+      -webkit-overflow-scrolling: touch;
     }
     #stats-bar span { color: var(--accent); font-weight: 600; }
 
-    /* ── CHAT ── */
+    /* ══════════ CHAT ══════════ */
     #chat {
-      flex: 1; overflow-y: auto; padding: 24px 20px;
-      display: flex; flex-direction: column; gap: 20px;
+      flex: 1; overflow-y: auto; padding: 16px;
+      display: flex; flex-direction: column; gap: 16px;
+      -webkit-overflow-scrolling: touch;
     }
     #chat::-webkit-scrollbar { width: 4px; }
     #chat::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
-    .msg-wrapper { display: flex; flex-direction: column; gap: 4px; }
+    .msg-wrapper { display: flex; flex-direction: column; gap: 4px; max-width: 100%; }
     .msg-wrapper.user { align-items: flex-end; }
     .msg-wrapper.assistant { align-items: flex-start; }
 
     .msg-meta { font-size: 10px; color: var(--muted); padding: 0 4px; display: flex; gap: 8px; align-items: center; }
 
     .msg {
-      max-width: 72%; padding: 12px 16px; border-radius: 16px;
-      font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word;
+      max-width: 85%; padding: 12px 14px; border-radius: 16px;
+      font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
     }
     .msg.user { background: var(--accent); color: #000; border-bottom-right-radius: 4px; font-weight: 500; }
     .msg.assistant { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
@@ -161,78 +189,68 @@
 
     .action-btn {
       background: none; border: none; color: var(--muted);
-      cursor: pointer; font-size: 11px; padding: 2px 6px;
-      border-radius: 4px; transition: color 0.2s;
+      cursor: pointer; font-size: 12px; padding: 4px 8px;
+      border-radius: 4px;
     }
-    .action-btn:hover { color: var(--accent); }
+    .action-btn:active { color: var(--accent); }
 
-    /* ── WELCOME ── */
-    .welcome { margin: auto; text-align: center; color: var(--muted); }
-    .welcome h2 { font-size: 36px; color: var(--accent); margin-bottom: 8px; }
-    .welcome p { font-size: 14px; margin-bottom: 20px; }
+    .welcome { margin: auto; text-align: center; color: var(--muted); padding: 20px; }
+    .welcome h2 { font-size: 28px; color: var(--accent); margin-bottom: 8px; }
+    .welcome p { font-size: 13px; margin-bottom: 20px; }
     .suggestions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 480px; }
     .suggestion {
       background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 20px; padding: 8px 14px; font-size: 12px;
-      color: var(--text); cursor: pointer; transition: border-color 0.2s, color 0.2s;
+      border-radius: 20px; padding: 10px 14px; font-size: 12px;
+      color: var(--text); cursor: pointer;
     }
-    .suggestion:hover { border-color: var(--accent); color: var(--accent); }
+    .suggestion:active { border-color: var(--accent); color: var(--accent); }
 
-    /* ── INPUT ── */
+    /* ══════════ INPUT ══════════ */
     #input-area {
-      padding: 16px 20px; background: var(--surface);
+      padding: 12px; background: var(--surface);
       border-top: 1px solid var(--border);
-      display: flex; gap: 10px; align-items: flex-end;
+      display: flex; gap: 8px; align-items: flex-end;
+      flex-shrink: 0;
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
     }
-    .input-wrap { flex: 1; display: flex; flex-direction: column; }
+    .input-wrap { flex: 1; display: flex; flex-direction: column; min-width: 0; }
     #msg {
       flex: 1; background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 12px; color: var(--text); padding: 12px 16px;
-      font-size: 14px; resize: none; outline: none; max-height: 140px;
-      line-height: 1.5; font-family: inherit; transition: border-color 0.2s;
+      border-radius: 12px; color: var(--text); padding: 12px 14px;
+      font-size: 16px; /* 16px+ evita zoom automático no iOS */
+      resize: none; outline: none; max-height: 120px;
+      line-height: 1.5; font-family: inherit;
     }
     #msg:focus { border-color: var(--accent); }
-    .input-hint { font-size: 10px; color: var(--muted); padding: 4px 4px 0; }
+    .input-hint { font-size: 10px; color: var(--muted); padding: 4px 4px 0; display: none; }
+    #mic-transcript { font-size: 11px; color: var(--muted); padding: 4px 4px 0; min-height: 14px; font-style: italic; }
 
-    /* ── BOTÕES DE AÇÃO ── */
-    .action-buttons { display: flex; gap: 8px; align-items: flex-end; }
+    .action-buttons { display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0; }
 
-    #mic-btn {
-      width: 46px; height: 46px; border-radius: 12px;
-      background: var(--surface2); border: 1px solid var(--border);
-      color: var(--text); font-size: 20px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      transition: all 0.2s; flex-shrink: 0;
+    #mic-btn, #send-btn {
+      width: 44px; height: 44px; border-radius: 12px;
+      font-size: 19px; cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
+      flex-shrink: 0; border: none;
     }
-    #mic-btn:hover { border-color: var(--accent); color: var(--accent); }
-    #mic-btn.listening {
-      background: var(--danger); border-color: var(--danger);
-      color: #fff; animation: mic-pulse 1s infinite;
-    }
+    #mic-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+    #mic-btn.listening { background: var(--danger); border-color: var(--danger); color: #fff; animation: mic-pulse 1s infinite; }
+    #mic-btn.unsupported { opacity: 0.35; }
     @keyframes mic-pulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,77,77,.4)} 50%{box-shadow:0 0 0 8px rgba(255,77,77,0)} }
 
-    #send-btn {
-      width: 46px; height: 46px; border-radius: 12px;
-      background: var(--accent); color: #000; border: none;
-      font-size: 20px; cursor: pointer; display: flex;
-      align-items: center; justify-content: center;
-      transition: background 0.2s, opacity 0.2s; flex-shrink: 0;
-    }
-    #send-btn:hover:not(:disabled) { background: var(--accent2); }
-    #send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    #send-btn { background: var(--accent); color: #000; }
+    #send-btn:disabled { opacity: 0.35; }
 
-    /* ── SPEAKING INDICATOR ── */
+    /* ══════════ SPEAKING BAR ══════════ */
     #speaking-bar {
       display: none; align-items: center; gap: 8px;
-      padding: 6px 20px; background: #0d1f17;
+      padding: 8px 16px; background: #0d1f17;
       border-top: 1px solid #0a3326; font-size: 12px; color: var(--accent);
+      flex-shrink: 0;
     }
     #speaking-bar.active { display: flex; }
     .wave { display: flex; gap: 3px; align-items: center; }
-    .wave span {
-      width: 3px; background: var(--accent); border-radius: 2px;
-      animation: wave 0.8s ease-in-out infinite;
-    }
+    .wave span { width: 3px; background: var(--accent); border-radius: 2px; animation: wave 0.8s ease-in-out infinite; }
     .wave span:nth-child(1){height:8px;animation-delay:0s}
     .wave span:nth-child(2){height:16px;animation-delay:.1s}
     .wave span:nth-child(3){height:12px;animation-delay:.2s}
@@ -242,19 +260,36 @@
 
     #stop-speak-btn {
       margin-left: auto; background: none; border: 1px solid var(--accent);
-      color: var(--accent); border-radius: 6px; padding: 3px 10px;
+      color: var(--accent); border-radius: 6px; padding: 5px 12px;
       font-size: 11px; cursor: pointer;
     }
-    #stop-speak-btn:hover { background: var(--accent); color: #000; }
 
-    /* ── MIC TRANSCRIPT ── */
-    #mic-transcript {
-      font-size: 11px; color: var(--muted); padding: 4px 4px 0;
-      min-height: 16px; font-style: italic;
+    /* ══════════ RESPONSIVE — TABLET / MOBILE ══════════ */
+    @media (max-width: 860px) {
+      #sidebar {
+        position: fixed; top: 0; bottom: 0; left: 0;
+        margin-left: calc(-1 * var(--sidebar-w));
+        box-shadow: 4px 0 20px rgba(0,0,0,0.5);
+      }
+      #sidebar.mobile-open { margin-left: 0; }
+      .input-hint { display: none; }
+      .msg { max-width: 90%; }
+      .welcome h2 { font-size: 24px; }
+      #stats-bar { font-size: 9px; gap: 12px; padding: 6px 12px; }
+      #topbar { padding: 10px 12px; }
+    }
+
+    @media (max-width: 480px) {
+      .msg { max-width: 92%; font-size: 13.5px; }
+      .sidebar-header, .settings-panel { padding-left: 14px; padding-right: 14px; }
+      #chat { padding: 12px; gap: 12px; }
+      #stats-bar > div:nth-child(n+4) { display: none; } /* esconde stats menos essenciais em telas pequenas */
     }
   </style>
 </head>
 <body>
+
+<div id="overlay" onclick="closeSidebarMobile()"></div>
 
 <!-- SIDEBAR -->
 <div id="sidebar">
@@ -282,7 +317,7 @@
 
     <div>
       <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px;">System Prompt</label>
-      <textarea id="system-prompt" placeholder="Ex: Você é o assistente da Tec Haze Circuit, uma tabacaria..."></textarea>
+      <textarea id="system-prompt" placeholder="Ex: Você é o assistente da Tec Haze Circuit..."></textarea>
     </div>
 
     <h3>🔊 Voz</h3>
@@ -306,9 +341,11 @@
 
     <div>
       <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px;">Voz</label>
-      <select id="voice-select" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 8px;font-size:12px;outline:none;">
-        <option>Carregando vozes...</option>
-      </select>
+      <select id="voice-select"><option>Carregando vozes...</option></select>
+    </div>
+
+    <div class="ios-notice" id="ios-notice">
+      📱 No iPhone, o reconhecimento de voz (microfone) não é suportado pelo Safari — mas a fala do assistente funciona normalmente. Para ditar mensagens, use o microfone do teclado do iOS.
     </div>
   </div>
 </div>
@@ -318,16 +355,16 @@
   <div id="topbar">
     <button id="toggle-sidebar" onclick="toggleSidebar()">☰</button>
     <div class="topbar-info">
-      <h1>Tec Haze Circuit — Assistente</h1>
-      <p id="model-label">google/gemma-3-1b-it • CPU • Voz PT-BR</p>
+      <h1>Tec Haze Circuit</h1>
+      <p id="model-label">google/gemma-3-1b-it • CPU</p>
     </div>
     <div class="status-dot"></div>
   </div>
 
   <div id="stats-bar">
-    <div>Mensagens: <span id="stat-msgs">0</span></div>
-    <div>Tokens enviados: <span id="stat-prompt">0</span></div>
-    <div>Tokens gerados: <span id="stat-completion">0</span></div>
+    <div>Msgs: <span id="stat-msgs">0</span></div>
+    <div>Enviados: <span id="stat-prompt">0</span></div>
+    <div>Gerados: <span id="stat-completion">0</span></div>
     <div>Total: <span id="stat-total">0</span></div>
     <div>Tempo: <span id="stat-time">—</span></div>
   </div>
@@ -339,24 +376,21 @@
       <div class="suggestions">
         <div class="suggestion" onclick="suggest(this)">Quais produtos vocês vendem?</div>
         <div class="suggestion" onclick="suggest(this)">Me ajude a escolher um produto</div>
-        <div class="suggestion" onclick="suggest(this)">Quais são as formas de pagamento?</div>
+        <div class="suggestion" onclick="suggest(this)">Formas de pagamento?</div>
         <div class="suggestion" onclick="suggest(this)">Como funciona a entrega?</div>
       </div>
     </div>
   </div>
 
-  <!-- Barra de fala ativa -->
   <div id="speaking-bar">
-    <div class="wave">
-      <span></span><span></span><span></span><span></span><span></span>
-    </div>
+    <div class="wave"><span></span><span></span><span></span><span></span><span></span></div>
     <span>Assistente falando...</span>
     <button id="stop-speak-btn" onclick="stopSpeaking()">■ Parar</button>
   </div>
 
   <div id="input-area">
     <div class="input-wrap">
-      <textarea id="msg" rows="1" placeholder="Digite ou clique no 🎙️ para falar..."></textarea>
+      <textarea id="msg" rows="1" placeholder="Digite ou fale..."></textarea>
       <div id="mic-transcript"></div>
       <div class="input-hint">Enter ↵ envia • Shift+Enter quebra linha</div>
     </div>
@@ -368,7 +402,17 @@
 </div>
 
 <script>
-// ── Estado ──────────────────────────────────────────────────────────────────
+// ── Detecção de plataforma ───────────────────────────────────────────────────
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+const isMobile = window.innerWidth <= 860;
+const hasSTT = ('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window);
+
+if (isIOS) document.getElementById('ios-notice').classList.add('show');
+if (!hasSTT) {
+  document.getElementById('mic-btn').classList.add('unsupported');
+}
+
+// ── Estado ────────────────────────────────────────────────────────────────────
 let conversations = JSON.parse(localStorage.getItem('thc-convs') || '[]');
 let activeId = null;
 let history = [];
@@ -378,19 +422,31 @@ let recognition = null;
 let isListening = false;
 let currentUtterance = null;
 
-// ── TTS — Síntese de Voz ────────────────────────────────────────────────────
+// ── Sidebar (desktop collapse / mobile drawer) ──────────────────────────────
+function toggleSidebar() {
+  if (isMobile) {
+    const sb = document.getElementById('sidebar');
+    const ov = document.getElementById('overlay');
+    sb.classList.toggle('mobile-open');
+    ov.classList.toggle('show');
+  } else {
+    document.getElementById('sidebar').classList.toggle('collapsed');
+  }
+}
+function closeSidebarMobile() {
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+// ── TTS ───────────────────────────────────────────────────────────────────────
 function loadVoices() {
   const sel = document.getElementById('voice-select');
   const voices = speechSynthesis.getVoices();
   if (!voices.length) return;
-
   sel.innerHTML = '';
-  // Prioriza vozes PT-BR
   const ptVoices = voices.filter(v => v.lang.startsWith('pt'));
   const otherVoices = voices.filter(v => !v.lang.startsWith('pt'));
-  const sorted = [...ptVoices, ...otherVoices];
-
-  sorted.forEach((v, i) => {
+  [...ptVoices, ...otherVoices].forEach((v,i) => {
     const opt = document.createElement('option');
     opt.value = i;
     opt.textContent = `${v.name} (${v.lang})`;
@@ -398,67 +454,51 @@ function loadVoices() {
     sel.appendChild(opt);
   });
 }
-
 speechSynthesis.onvoiceschanged = loadVoices;
 loadVoices();
+// iOS às vezes só popula vozes depois de um pequeno delay
+setTimeout(loadVoices, 500);
 
 function speak(text) {
   if (!ttsEnabled) return;
   stopSpeaking();
-
-  // Remove markdown simples antes de falar
-  const clean = text
-    .replace(/\*\*(.*?)\*\*/g, '$1')
-    .replace(/\*(.*?)\*/g, '$1')
-    .replace(/#{1,6}\s/g, '')
-    .replace(/`[^`]*`/g, '')
-    .trim();
+  const clean = text.replace(/\*\*(.*?)\*\*/g,'$1').replace(/\*(.*?)\*/g,'$1')
+                     .replace(/#{1,6}\s/g,'').replace(/`[^`]*`/g,'').trim();
 
   const voices = speechSynthesis.getVoices();
   const sel = document.getElementById('voice-select');
-  const voice = voices[parseInt(sel.value)] || voices.find(v => v.lang === 'pt-BR') || voices[0];
+  const voice = voices[parseInt(sel.value)] || voices.find(v=>v.lang==='pt-BR') || voices[0];
 
   currentUtterance = new SpeechSynthesisUtterance(clean);
-  currentUtterance.voice = voice;
+  if (voice) currentUtterance.voice = voice;
   currentUtterance.lang = 'pt-BR';
   currentUtterance.rate = parseFloat(document.getElementById('voice-rate').value);
   currentUtterance.pitch = parseFloat(document.getElementById('voice-pitch').value);
-
-  currentUtterance.onstart = () => {
-    document.getElementById('speaking-bar').classList.add('active');
-  };
-  currentUtterance.onend = () => {
-    document.getElementById('speaking-bar').classList.remove('active');
-  };
-  currentUtterance.onerror = () => {
-    document.getElementById('speaking-bar').classList.remove('active');
-  };
+  currentUtterance.onstart = () => document.getElementById('speaking-bar').classList.add('active');
+  currentUtterance.onend = () => document.getElementById('speaking-bar').classList.remove('active');
+  currentUtterance.onerror = () => document.getElementById('speaking-bar').classList.remove('active');
 
   speechSynthesis.speak(currentUtterance);
 }
-
 function stopSpeaking() {
   speechSynthesis.cancel();
   document.getElementById('speaking-bar').classList.remove('active');
 }
-
 function toggleTTS(btn) {
   ttsEnabled = !ttsEnabled;
   btn.classList.toggle('on', ttsEnabled);
   if (!ttsEnabled) stopSpeaking();
 }
 
-// ── STT — Reconhecimento de Voz ─────────────────────────────────────────────
+// ── STT (Chrome/Edge Windows e Android — não suportado no iOS Safari) ───────
 function toggleMic() {
-  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    alert('Seu browser não suporta reconhecimento de voz. Use Chrome ou Edge.');
+  if (!hasSTT) {
+    alert(isIOS
+      ? 'No iPhone, use o microfone do teclado do iOS para ditar — o Safari não suporta reconhecimento de voz via navegador.'
+      : 'Seu navegador não suporta reconhecimento de voz. Use Chrome ou Edge.');
     return;
   }
-
-  if (isListening) {
-    recognition.stop();
-    return;
-  }
+  if (isListening) { recognition.stop(); return; }
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   recognition = new SpeechRecognition();
@@ -471,45 +511,32 @@ function toggleMic() {
     document.getElementById('mic-btn').classList.add('listening');
     document.getElementById('mic-btn').textContent = '⏹';
     document.getElementById('mic-transcript').textContent = '🎙️ Ouvindo...';
-    stopSpeaking(); // Para fala se estiver falando
+    stopSpeaking();
   };
-
   recognition.onresult = (e) => {
-    let interim = '', final = '';
+    let interim='', final='';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) final += t;
-      else interim += t;
+      if (e.results[i].isFinal) final += t; else interim += t;
     }
     document.getElementById('mic-transcript').textContent = '🎙️ ' + (final || interim);
-    if (final) {
-      document.getElementById('msg').value = final;
-    }
+    if (final) document.getElementById('msg').value = final;
   };
-
   recognition.onend = () => {
     isListening = false;
     document.getElementById('mic-btn').classList.remove('listening');
     document.getElementById('mic-btn').textContent = '🎙️';
-
     const text = document.getElementById('msg').value.trim();
     document.getElementById('mic-transcript').textContent = '';
     if (text) sendMessage();
   };
-
   recognition.onerror = (e) => {
     isListening = false;
     document.getElementById('mic-btn').classList.remove('listening');
     document.getElementById('mic-btn').textContent = '🎙️';
     document.getElementById('mic-transcript').textContent = '❌ Erro: ' + e.error;
   };
-
   recognition.start();
-}
-
-// ── Sidebar ──────────────────────────────────────────────────────────────────
-function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('collapsed');
 }
 
 function suggest(el) {
@@ -518,23 +545,23 @@ function suggest(el) {
 }
 
 // ── Conversas ────────────────────────────────────────────────────────────────
-function saveConvs() { localStorage.setItem('thc-convs', JSON.stringify(conversations)); }
+function saveConvs(){ localStorage.setItem('thc-convs', JSON.stringify(conversations)); }
 
 function renderConvList() {
   const el = document.getElementById('conversations');
   el.innerHTML = '';
   [...conversations].reverse().forEach(c => {
     const div = document.createElement('div');
-    div.className = 'conv-item' + (c.id === activeId ? ' active' : '');
+    div.className = 'conv-item' + (c.id===activeId ? ' active' : '');
     div.innerHTML = `<span class="conv-title">${c.title}</span>
       <button class="conv-delete" onclick="deleteConv('${c.id}',event)">✕</button>`;
-    div.onclick = () => loadConv(c.id);
+    div.onclick = () => { loadConv(c.id); if (isMobile) closeSidebarMobile(); };
     el.appendChild(div);
   });
 }
 
 function newChat() {
-  if (history.length > 0) saveCurrentConv();
+  if (history.length) saveCurrentConv();
   activeId = null; history = [];
   totalPrompt = 0; totalCompletion = 0;
   updateStats(0,0,0);
@@ -547,11 +574,12 @@ function newChat() {
       <div class="suggestions">
         <div class="suggestion" onclick="suggest(this)">Quais produtos vocês vendem?</div>
         <div class="suggestion" onclick="suggest(this)">Me ajude a escolher um produto</div>
-        <div class="suggestion" onclick="suggest(this)">Quais são as formas de pagamento?</div>
+        <div class="suggestion" onclick="suggest(this)">Formas de pagamento?</div>
         <div class="suggestion" onclick="suggest(this)">Como funciona a entrega?</div>
       </div>
     </div>`;
   renderConvList();
+  if (isMobile) closeSidebarMobile();
 }
 
 function saveCurrentConv() {
@@ -644,11 +672,11 @@ const msgInput = document.getElementById('msg');
 const sendBtn = document.getElementById('send-btn');
 
 msgInput.addEventListener('keydown', e => {
-  if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  if (e.key==='Enter' && !e.shiftKey && !isMobile) { e.preventDefault(); sendMessage(); }
 });
 msgInput.addEventListener('input', () => {
   msgInput.style.height = 'auto';
-  msgInput.style.height = Math.min(msgInput.scrollHeight,140)+'px';
+  msgInput.style.height = Math.min(msgInput.scrollHeight,120)+'px';
 });
 
 // ── Send ─────────────────────────────────────────────────────────────────────
@@ -663,7 +691,6 @@ async function sendMessage() {
   msgInput.value = ''; msgInput.style.height = 'auto';
   sendBtn.disabled = true;
 
-  // Pensando
   const thinkingWrapper = document.createElement('div');
   thinkingWrapper.className = 'msg-wrapper assistant';
   const thinkingDiv = document.createElement('div');
@@ -706,13 +733,11 @@ async function sendMessage() {
     saveCurrentConv();
 
     const tokMeta = usage.total_tokens
-      ? `${usage.completion_tokens} tokens • ${(ms/1000).toFixed(1)}s`
+      ? `${usage.completion_tokens} tok • ${(ms/1000).toFixed(1)}s`
       : `${(ms/1000).toFixed(1)}s`;
 
     appendMessage('assistant', reply, tokMeta);
     updateStats(usage.prompt_tokens||0, usage.completion_tokens||0, ms);
-
-    // 🔊 Fala a resposta automaticamente
     speak(reply);
 
   } catch(err) {
@@ -720,12 +745,13 @@ async function sendMessage() {
     appendMessage('assistant', '❌ Erro de conexão: ' + err.message);
   } finally {
     sendBtn.disabled = false;
-    msgInput.focus();
+    if (!isMobile) msgInput.focus();
   }
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 renderConvList();
+if (isMobile) document.getElementById('sidebar').classList.add('collapsed');
 </script>
 </body>
 </html>
