@@ -23,10 +23,7 @@
       --sidebar-w: 260px;
     }
 
-    html, body {
-      height: 100%;
-      overflow: hidden;
-    }
+    html, body { height: 100%; overflow: hidden; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -34,7 +31,7 @@
       color: var(--text);
       display: flex;
       height: 100vh;
-      height: 100dvh; /* mobile viewport correto (barra do browser) */
+      height: 100dvh;
     }
 
     button, .conv-item, .suggestion { -webkit-user-select: none; user-select: none; }
@@ -217,7 +214,7 @@
     #msg {
       flex: 1; background: var(--surface2); border: 1px solid var(--border);
       border-radius: 12px; color: var(--text); padding: 12px 14px;
-      font-size: 16px; /* 16px+ evita zoom automático no iOS */
+      font-size: 16px;
       resize: none; outline: none; max-height: 120px;
       line-height: 1.5; font-family: inherit;
     }
@@ -264,6 +261,75 @@
       font-size: 11px; cursor: pointer;
     }
 
+    /* ══════════ TABS (Chat / Imagem) ══════════ */
+    .mode-tabs { display: flex; gap: 4px; margin-left: 8px; flex-shrink: 0; }
+    .mode-tab {
+      background: none; border: 1px solid var(--border); color: var(--muted);
+      border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+      transition: all 0.2s; white-space: nowrap;
+    }
+    .mode-tab.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+
+    #image-view { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+    #image-view.active { display: flex; }
+
+    #image-prompt-area {
+      padding: 16px; background: var(--surface); border-bottom: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 10px; flex-shrink: 0;
+    }
+    #image-prompt {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; color: var(--text); padding: 12px 14px;
+      font-size: 16px; resize: none; outline: none; font-family: inherit; height: 60px;
+    }
+    #image-prompt:focus { border-color: var(--accent); }
+
+    .image-controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .image-controls .slider-group { flex: 1; min-width: 140px; }
+    .image-controls label { font-size: 11px; }
+
+    #generate-img-btn {
+      background: var(--accent); color: #000; border: none; border-radius: 10px;
+      padding: 10px 20px; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+    }
+    #generate-img-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    #image-gallery {
+      flex: 1; overflow-y: auto; padding: 16px;
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px; align-content: start; -webkit-overflow-scrolling: touch;
+    }
+
+    .image-card {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden; display: flex; flex-direction: column;
+    }
+    .image-card img { width: 100%; display: block; aspect-ratio: 1; object-fit: cover; }
+    .image-card-footer {
+      padding: 8px 10px; display: flex; justify-content: space-between;
+      align-items: center; gap: 8px;
+    }
+    .image-card-prompt {
+      font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; flex: 1;
+    }
+    .image-card-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+    .img-loading-card {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; aspect-ratio: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 12px;
+    }
+    .spinner {
+      width: 32px; height: 32px; border: 3px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .img-welcome { margin: auto; text-align: center; color: var(--muted); padding: 20px; grid-column: 1/-1; }
+    .img-welcome h2 { font-size: 28px; color: var(--accent); margin-bottom: 8px; }
+
     /* ══════════ RESPONSIVE — TABLET / MOBILE ══════════ */
     @media (max-width: 860px) {
       #sidebar {
@@ -276,14 +342,18 @@
       .msg { max-width: 90%; }
       .welcome h2 { font-size: 24px; }
       #stats-bar { font-size: 9px; gap: 12px; padding: 6px 12px; }
-      #topbar { padding: 10px 12px; }
+      #topbar { padding: 10px 12px; flex-wrap: wrap; }
+      .mode-tabs { order: 3; width: 100%; margin-left: 0; margin-top: 4px; }
     }
 
     @media (max-width: 480px) {
       .msg { max-width: 92%; font-size: 13.5px; }
       .sidebar-header, .settings-panel { padding-left: 14px; padding-right: 14px; }
       #chat { padding: 12px; gap: 12px; }
-      #stats-bar > div:nth-child(n+4) { display: none; } /* esconde stats menos essenciais em telas pequenas */
+      #stats-bar > div:nth-child(n+4) { display: none; }
+      #image-gallery { grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; }
+      .image-controls { flex-direction: column; align-items: stretch; }
+      #generate-img-btn { width: 100%; }
     }
   </style>
 </head>
@@ -358,6 +428,10 @@
       <h1>Tec Haze Circuit</h1>
       <p id="model-label">google/gemma-3-1b-it • CPU</p>
     </div>
+    <div class="mode-tabs">
+      <button class="mode-tab active" id="tab-chat" onclick="switchMode('chat')">💬 Chat</button>
+      <button class="mode-tab" id="tab-image" onclick="switchMode('image')">🎨 Imagem</button>
+    </div>
     <div class="status-dot"></div>
   </div>
 
@@ -369,34 +443,63 @@
     <div>Tempo: <span id="stat-time">—</span></div>
   </div>
 
-  <div id="chat">
-    <div class="welcome">
-      <h2>THC LLM 🎙️</h2>
-      <p>Fale ou escreva — o assistente responde em voz e texto!</p>
-      <div class="suggestions">
-        <div class="suggestion" onclick="suggest(this)">Quais produtos vocês vendem?</div>
-        <div class="suggestion" onclick="suggest(this)">Me ajude a escolher um produto</div>
-        <div class="suggestion" onclick="suggest(this)">Formas de pagamento?</div>
-        <div class="suggestion" onclick="suggest(this)">Como funciona a entrega?</div>
+  <!-- CHAT VIEW -->
+  <div id="chat-view" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+    <div id="chat">
+      <div class="welcome">
+        <h2>THC LLM 🎙️</h2>
+        <p>Fale ou escreva — o assistente responde em voz e texto!</p>
+        <div class="suggestions">
+          <div class="suggestion" onclick="suggest(this)">Quais produtos vocês vendem?</div>
+          <div class="suggestion" onclick="suggest(this)">Me ajude a escolher um produto</div>
+          <div class="suggestion" onclick="suggest(this)">Formas de pagamento?</div>
+          <div class="suggestion" onclick="suggest(this)">Como funciona a entrega?</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="speaking-bar">
+      <div class="wave"><span></span><span></span><span></span><span></span><span></span></div>
+      <span>Assistente falando...</span>
+      <button id="stop-speak-btn" onclick="stopSpeaking()">■ Parar</button>
+    </div>
+
+    <div id="input-area">
+      <div class="input-wrap">
+        <textarea id="msg" rows="1" placeholder="Digite ou fale..."></textarea>
+        <div id="mic-transcript"></div>
+        <div class="input-hint">Enter ↵ envia • Shift+Enter quebra linha</div>
+      </div>
+      <div class="action-buttons">
+        <button id="mic-btn" onclick="toggleMic()" title="Falar">🎙️</button>
+        <button id="send-btn" onclick="sendMessage()" title="Enviar">➤</button>
       </div>
     </div>
   </div>
 
-  <div id="speaking-bar">
-    <div class="wave"><span></span><span></span><span></span><span></span><span></span></div>
-    <span>Assistente falando...</span>
-    <button id="stop-speak-btn" onclick="stopSpeaking()">■ Parar</button>
-  </div>
-
-  <div id="input-area">
-    <div class="input-wrap">
-      <textarea id="msg" rows="1" placeholder="Digite ou fale..."></textarea>
-      <div id="mic-transcript"></div>
-      <div class="input-hint">Enter ↵ envia • Shift+Enter quebra linha</div>
+  <!-- IMAGE VIEW -->
+  <div id="image-view">
+    <div id="image-prompt-area">
+      <textarea id="image-prompt" placeholder="Descreva a imagem que quer gerar... ex: logo minimalista de tabacaria, estilo neon verde"></textarea>
+      <div class="image-controls">
+        <div class="slider-group">
+          <label>Passos <span id="steps-val">2</span></label>
+          <input type="range" id="img-steps" min="1" max="4" step="1" value="2"
+                 oninput="document.getElementById('steps-val').textContent=this.value">
+        </div>
+        <div class="slider-group">
+          <label>Tamanho <span id="size-val">512</span>px</label>
+          <input type="range" id="img-size" min="256" max="768" step="128" value="512"
+                 oninput="document.getElementById('size-val').textContent=this.value">
+        </div>
+        <button id="generate-img-btn" onclick="generateImage()">🎨 Gerar</button>
+      </div>
     </div>
-    <div class="action-buttons">
-      <button id="mic-btn" onclick="toggleMic()" title="Falar">🎙️</button>
-      <button id="send-btn" onclick="sendMessage()" title="Enviar">➤</button>
+    <div id="image-gallery">
+      <div class="img-welcome">
+        <h2>🎨 Gerador de Imagens</h2>
+        <p>Descreva o que quer criar acima. No CPU, cada imagem leva ~30-90s.</p>
+      </div>
     </div>
   </div>
 </div>
@@ -438,6 +541,15 @@ function closeSidebarMobile() {
   document.getElementById('overlay').classList.remove('show');
 }
 
+// ── Troca de modo (Chat / Imagem) ───────────────────────────────────────────
+function switchMode(mode) {
+  document.getElementById('tab-chat').classList.toggle('active', mode==='chat');
+  document.getElementById('tab-image').classList.toggle('active', mode==='image');
+  document.getElementById('chat-view').style.display = mode==='chat' ? 'flex' : 'none';
+  document.getElementById('image-view').classList.toggle('active', mode==='image');
+  if (mode === 'image') stopSpeaking();
+}
+
 // ── TTS ───────────────────────────────────────────────────────────────────────
 function loadVoices() {
   const sel = document.getElementById('voice-select');
@@ -456,7 +568,6 @@ function loadVoices() {
 }
 speechSynthesis.onvoiceschanged = loadVoices;
 loadVoices();
-// iOS às vezes só popula vozes depois de um pequeno delay
 setTimeout(loadVoices, 500);
 
 function speak(text) {
@@ -490,7 +601,7 @@ function toggleTTS(btn) {
   if (!ttsEnabled) stopSpeaking();
 }
 
-// ── STT (Chrome/Edge Windows e Android — não suportado no iOS Safari) ───────
+// ── STT ──────────────────────────────────────────────────────────────────────
 function toggleMic() {
   if (!hasSTT) {
     alert(isIOS
@@ -679,7 +790,7 @@ msgInput.addEventListener('input', () => {
   msgInput.style.height = Math.min(msgInput.scrollHeight,120)+'px';
 });
 
-// ── Send ─────────────────────────────────────────────────────────────────────
+// ── Send (chat) ──────────────────────────────────────────────────────────────
 async function sendMessage() {
   const text = msgInput.value.trim();
   if (!text || sendBtn.disabled) return;
@@ -747,6 +858,72 @@ async function sendMessage() {
     sendBtn.disabled = false;
     if (!isMobile) msgInput.focus();
   }
+}
+
+// ── Geração de imagem ────────────────────────────────────────────────────────
+async function generateImage() {
+  const promptEl = document.getElementById('image-prompt');
+  const prompt = promptEl.value.trim();
+  if (!prompt) return;
+
+  const btn = document.getElementById('generate-img-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Gerando...';
+
+  const gallery = document.getElementById('image-gallery');
+  document.querySelector('.img-welcome')?.remove();
+
+  const loadingCard = document.createElement('div');
+  loadingCard.className = 'img-loading-card';
+  loadingCard.innerHTML = `<div class="spinner"></div><span>Gerando... (~30-90s no CPU)</span>`;
+  gallery.prepend(loadingCard);
+
+  try {
+    const res = await fetch('/v1/images/generations', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        prompt,
+        steps: parseInt(document.getElementById('img-steps').value),
+        size: parseInt(document.getElementById('img-size').value),
+      })
+    });
+
+    const data = await res.json();
+    loadingCard.remove();
+
+    if (!res.ok) {
+      alert('Erro ao gerar imagem: ' + (data.detail || 'Erro desconhecido'));
+      return;
+    }
+
+    const b64 = data.data[0].b64_json;
+    const card = document.createElement('div');
+    card.className = 'image-card';
+    card.innerHTML = `
+      <img src="data:image/png;base64,${b64}" alt="${prompt}">
+      <div class="image-card-footer">
+        <span class="image-card-prompt" title="${prompt}">${prompt}</span>
+        <div class="image-card-actions">
+          <button class="action-btn" title="Baixar" onclick="downloadImage('${b64}', '${prompt.replace(/'/g,"")}')">⬇</button>
+        </div>
+      </div>`;
+    gallery.prepend(card);
+
+  } catch (err) {
+    loadingCard.remove();
+    alert('Erro de conexão: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🎨 Gerar';
+  }
+}
+
+function downloadImage(b64, prompt) {
+  const link = document.createElement('a');
+  link.href = 'data:image/png;base64,' + b64;
+  link.download = `thc-${prompt.slice(0,20).replace(/\s+/g,'-')}.png`;
+  link.click();
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
