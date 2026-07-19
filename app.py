@@ -2,6 +2,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import List, Optional
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from huggingface_hub import login
@@ -199,7 +201,15 @@ def web_search(query, max_results=4):
 # Monta o system prompt combinando idioma + RAG + skills + web + modo
 # ═══════════════════════════════════════════════════════════════════════════
 def build_system_prompt(user_query, mode, use_web):
-    parts = [LANGUAGE_INSTRUCTION]
+    now = datetime.now(ZoneInfo("America/Sao_Paulo"))
+    now_str = now.strftime("%A, %d de %B de %Y, %H:%M (horário de Brasília)")
+
+    parts = [
+        LANGUAGE_INSTRUCTION,
+        f"\nA data e hora atuais são: {now_str}. Esta é a fonte oficial e confiável "
+        f"para qualquer pergunta sobre data ou hora atual — nunca invente outra data "
+        f"nem use datas do seu treinamento para isso.",
+    ]
 
     knowledge_hits = retrieve(user_query, knowledge_index, top_k=3)
     if knowledge_hits:
@@ -216,6 +226,11 @@ def build_system_prompt(user_query, mode, use_web):
         if web_results:
             parts.append(
                 f"\n### Resultados de busca na web (cite a fonte quando usar):\n{web_results}"
+            )
+        else:
+            parts.append(
+                "\n### Busca na web ativada, mas não retornou resultados úteis para esta "
+                "pergunta. Informe isso ao usuário em vez de inventar uma resposta."
             )
 
     if mode == "thinking":
