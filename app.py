@@ -30,6 +30,48 @@ logging.basicConfig(
 )
 logger = logging.getLogger("THC_LLM")
 
+# ── Custom Exceptions ───────────────────────────────────────────────────────────
+class THCError(HTTPException):
+    """Base exception for THC LLM application"""
+    def __init__(self, detail: str, status_code: int = 500):
+        super().__init__(status_code=status_code, detail=detail)
+
+
+class ModelNotFoundError(THCError):
+    """Raised when a requested model is not found"""
+    def __init__(self, detail: str):
+        super().__init__(detail=detail, status_code=400)
+
+
+class ModelLoadError(THCError):
+    """Raised when a model fails to load"""
+    pass
+
+
+class BackendError(THCError):
+    """Raised when a backend operation fails"""
+    pass
+
+
+class ConfigurationError(THCError):
+    """Raised when configuration is missing or invalid"""
+    pass
+
+
+class APIError(THCError):
+    """Raised when external API calls fail"""
+    pass
+
+
+class ImageGenerationError(THCError):
+    """Raised when image generation fails"""
+    pass
+
+
+class ChatError(THCError):
+    """Raised when chat completion fails"""
+    pass
+
 # ── Autenticação ──────────────────────────────────────────────────────────────
 hf_token = os.environ.get("HF_TOKEN")
 if hf_token:
@@ -293,7 +335,7 @@ def unload_current():
 
 def get_text_model(key: str):
     if key not in TEXT_MODELS:
-        raise HTTPException(status_code=400, detail=f"Modelo desconhecido: {key}")
+        raise ModelNotFoundError(f"Modelo desconhecido: {key}")
 
     if _current.get("key") == key and _current.get("model") is not None:
         return _current
@@ -339,13 +381,13 @@ def get_text_model(key: str):
             _current.update({"key": key, "tokenizer": None, "model": model_id, "backend": "kilo"})
 
         else:
-            raise HTTPException(status_code=500, detail=f"Backend desconhecido: {backend}")
+            raise BackendError(f"Backend desconhecido: {backend}")
 
     except HTTPException:
         raise
     except Exception as e:
         unload_current()
-        raise HTTPException(status_code=500, detail=f"Erro ao carregar {key}: {str(e)}") from e
+        raise ModelLoadError(f"Erro ao carregar {key}: {str(e)}") from e
 
     logger.info(f"Modelo {key} carregado!")
     return _current
@@ -488,7 +530,7 @@ def chat_completions(req: ChatRequest):
             model_id = state["model"]
             kilo_api_key = os.environ.get("KILO_API_KEY")
             if not kilo_api_key:
-                raise HTTPException(status_code=500, detail="KILO_API_KEY não configurada")
+                raise ConfigurationError("KILO_API_KEY não configurada")
 
             headers = {
                 "Authorization": f"Bearer {kilo_api_key}",
@@ -513,7 +555,7 @@ def chat_completions(req: ChatRequest):
 
             resp = asyncio.run(call_kilo_api())
             if resp.status_code != 200:
-                raise HTTPException(status_code=500, detail=f"Erro Kilo API: {resp.text}")
+                raise APIError(f"Erro Kilo API: {resp.text}")
 
             data = resp.json()
             text = data["choices"][0]["message"]["content"]
@@ -522,7 +564,7 @@ def chat_completions(req: ChatRequest):
             completion_tokens = usage.get("completion_tokens", 0)
 
         else:
-            raise HTTPException(status_code=500, detail="Backend inválido")
+            raise BackendError("Backend inválido")
 
         elapsed = time.time() - t0
         logger.info(f"Resposta gerada em {elapsed:.1f}s ({backend}, web={req.web})")
@@ -549,7 +591,7 @@ def chat_completions(req: ChatRequest):
     except Exception as e:
         err = traceback.format_exc()
         logger.error(f"Erro no chat: {err}")
-        raise HTTPException(status_code=500, detail=str(e) + "\n" + err)
+        raise ChatError(str(e) + "\n" + err)
 
 # ── Endpoints — Geração de Imagem ──────────────────────────────────────────────
 @app.post("/v1/images/generations")
@@ -580,4 +622,4 @@ def generate_image(req: ImageRequest):
     except Exception as e:
         err = traceback.format_exc()
         logger.error(f"Erro na geração de imagem: {err}")
-        raise HTTPException(status_code=500, detail=str(e) + "\n" + err)
+        raise ImageGenerationError(str(e) + "\n" + err)
