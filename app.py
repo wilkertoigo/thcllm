@@ -445,6 +445,44 @@ def chat_completions(req: ChatRequest):
             prompt_tokens = usage.get("prompt_tokens", 0)
             completion_tokens = usage.get("completion_tokens", 0)
 
+        elif backend == "openrouter":
+            model_id = state["model"]
+            openrouter_api_key = os.environ.get("OPENROUTER_API_KEY")
+            if not openrouter_api_key:
+                raise ConfigurationError("OPENROUTER_API_KEY não configurada")
+
+            headers = {
+                "Authorization": f"Bearer {openrouter_api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": model_id,
+                "messages": chat,
+                "max_tokens": max_tokens,
+                "temperature": temperature if temperature else 0.0,
+            }
+
+            @async_retry_with_backoff(max_retries=3, initial_delay=1, backoff_factor=2)
+            async def call_openrouter_api():
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        json=payload,
+                        headers=headers,
+                        timeout=60.0,
+                    )
+                    return resp
+
+            resp = asyncio.run(call_openrouter_api())
+            if resp.status_code != 200:
+                raise APIError(f"Erro OpenRouter API: {resp.text}")
+
+            data = resp.json()
+            text = data["choices"][0]["message"]["content"]
+            usage = data.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+
         else:
             raise BackendError("Backend inválido")
 

@@ -2,12 +2,81 @@
 """Configuração independente sem imports circulares"""
 
 TEXT_MODELS = {
+    # ── KILO BACKEND (do maior para o menor porte) ────────────────────────────────────────
+    "nemotron-ultra-free": {
+        "backend": "kilo",
+        "model_id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "label": "Nemotron Ultra 550B (free)",
+        "desc": "🚀 Kilo free • 550B NVIDIA",
+    },
+    "hy3-free": {
+        "backend": "kilo",
+        "model_id": "tencent/hy3:free",
+        "label": "Hy3 295B (free)",
+        "desc": "🔥 Kilo free • 295B MoE Tencent",
+    },
+    "nemotron-super-free": {
+        "backend": "kilo",
+        "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
+        "label": "Nemotron Super 120B (free)",
+        "desc": "🚀 Kilo free • 120B NVIDIA",
+    },
+    "laguna-free": {
+        "backend": "kilo",
+        "model_id": "poolside/laguna-m.1:free",
+        "label": "Laguna M.1 (free)",
+        "desc": "⚡ Kilo free • Poolside",
+    },
+    "laguna-xs-free": {
+        "backend": "kilo",
+        "model_id": "poolside/laguna-xs-2.1:free",
+        "label": "Laguna XS 2.1 (free)",
+        "desc": "⚡ Kilo free • coding agent 33B",
+    },
+    "nemotron-nano-omni-free": {
+        "backend": "kilo",
+        "model_id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "label": "Nemotron Nano Omni 30B (free)",
+        "desc": "⚡ Kilo free • multimodal + reasoning",
+    },
+    "north-mini-code-free": {
+        "backend": "kilo",
+        "model_id": "cohere/north-mini-code:free",
+        "label": "North Mini Code (free)",
+        "desc": "💻 Kilo free • Cohere coding",
+    },
+    "gemma4-31b-free": {
+        "backend": "openrouter",
+        "model_id": "google/gemma-4-31b-it:free",
+        "label": "Gemma 4 31B (free)",
+        "desc": "🔥 OpenRouter free • Google",
+    },
+    "gptoss-20b-free": {
+        "backend": "openrouter",
+        "model_id": "openai/gpt-oss-20b:free",
+        "label": "GPT-OSS 20B (free)",
+        "desc": "🤖 OpenRouter free • OpenAI open-weight",
+    },
+    "nemotron-vl-free": {
+        "backend": "openrouter",
+        "model_id": "nvidia/nemotron-nano-12b-v2-vl:free",
+        "label": "Nemotron Nano 12B VL (free)",
+        "desc": "👁️ OpenRouter free • visão + texto",
+    },
+    "openrouter-auto-free": {
+        "backend": "kilo",
+        "model_id": "openrouter/free",
+        "label": "OpenRouter Auto (free)",
+        "desc": "🎲 Kilo free • roteador automático",
+    },
+    # ── TRANSFORMERS BACKEND ──────────────────────────────────────────────────────────────
     "gemma-1b": {
         "backend": "transformers",
         "id": "google/gemma-3-1b-it",
         "label": "Gemma 3 1B",
         "desc": "Rápido • conversação geral",
     },
+    # ── GGUF BACKEND ────────────────────────────────────────────────────────────────────────
     "gemma-4b": {
         "backend": "gguf",
         "repo": "bartowski/google_gemma-3-4b-it-GGUF",
@@ -62,30 +131,6 @@ TEXT_MODELS = {
         "file": "DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf",
         "label": "DeepSeek R1 Distill 14B",
         "desc": "🧮 Raciocínio avançado • ~9GB GGUF",
-    },
-    "hy3-free": {
-        "backend": "kilo",
-        "model_id": "tencent/hy3:free",
-        "label": "Hy3 295B (free)",
-        "desc": "🔥 Kilo free • 295B MoE Tencent",
-    },
-    "nemotron-ultra-free": {
-        "backend": "kilo",
-        "model_id": "nvidia/nemotron-3-ultra-550b-a55b:free",
-        "label": "Nemotron Ultra 550B (free)",
-        "desc": "🚀 Kilo free • 550B NVIDIA",
-    },
-    "laguna-free": {
-        "backend": "kilo",
-        "model_id": "poolside/laguna-m.1:free",
-        "label": "Laguna M.1 (free)",
-        "desc": "⚡ Kilo free • Poolside",
-    },
-    "laguna-xs-free": {
-        "backend": "kilo",
-        "model_id": "poolside/laguna-xs-2.1:free",
-        "label": "Laguna XS 2.1 (free)",
-        "desc": "⚡ Kilo free • coding agent 33B",
     },
 }
 
