@@ -11,7 +11,9 @@ import uuid
 import base64
 import io
 import gc
+import glob
 import traceback
+import numpy as np
 
 # ── Autenticação ──────────────────────────────────────────────────────────────
 hf_token = os.environ.get("HF_TOKEN")
@@ -86,13 +88,144 @@ TEXT_MODELS = {
 }
 DEFAULT_MODEL_KEY = "gemma-1b"
 
-# ── Instrução de idioma — sempre aplicada, em todos os modelos e modos ───────
 LANGUAGE_INSTRUCTION = (
     "Responda SEMPRE em português do Brasil, independentemente do idioma da "
     "pergunta. Nunca responda em chinês, inglês, japonês ou qualquer outro "
     "idioma, mesmo que seu raciocínio interno use outro idioma — a resposta "
     "final deve ser 100% em português do Brasil."
 )
+
+# ═══════════════════════════════════════════════════════════════════════════
+# RAG + SKILLS — base de conhecimento local (embeddings + busca por similaridade)
+# ═══════════════════════════════════════════════════════════════════════════
+KNOWLEDGE_DIR = "knowledge"
+SKILLS_DIR = "skills"
+EMBED_MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
+
+embed_model = None
+knowledge_index = {"chunks": [], "vectors": None}
+skills_index = {"chunks": [], "vectors": None}
+
+
+def get_embed_model():
+    global embed_model
+    if embed_model is None:
+        from sentence_transformers import SentenceTransformer
+        print(f"[THC LLM] Carregando modelo de embeddings ({EMBED_MODEL_ID})...")
+        embed_model = SentenceTransformer(EMBED_MODEL_ID)
+        print("[THC LLM] Modelo de embeddings pronto!")
+    return embed_model
+
+
+def chunk_text(text, max_chars=600):
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    chunks = []
+    for p in paragraphs:
+        if len(p) <= max_chars:
+            chunks.append(p)
+        else:
+            for i in range(0, len(p), max_chars):
+                chunks.append(p[i:i + max_chars])
+    return chunks
+
+
+def build_index(directory):
+    os.makedirs(directory, exist_ok=True)
+    files = glob.glob(os.path.join(directory, "*.md")) + glob.glob(os.path.join(directory, "*.txt"))
+    all_chunks = []
+    for f in files:
+        try:
+            with open(f, "r", encoding="utf-8") as fh:
+                content = fh.read()
+            for chunk in chunk_text(content):
+                all_chunks.append({"text": chunk, "source": os.path.basename(f)})
+        except Exception as e:
+            print(f"[THC LLM] Erro lendo {f}: {e}")
+
+    if not all_chunks:
+        print(f"[THC LLM] Nenhum arquivo .md/.txt encontrado em /{directory} — RAG dessa pasta ficará vazio.")
+        return {"chunks": [], "vectors": None}
+
+    model = get_embed_model()
+    texts = [c["text"] for c in all_chunks]
+    vectors = model.encode(texts, normalize_embeddings=True)
+    print(f"[THC LLM] Indexado: {len(all_chunks)} trechos de /{directory}")
+    return {"chunks": all_chunks, "vectors": np.array(vectors)}
+
+
+def retrieve(query, index, top_k=3, min_score=0.25):
+    if index["vectors"] is None or len(index["chunks"]) == 0:
+        return []
+    model = get_embed_model()
+    q_vec = model.encode([query], normalize_embeddings=True)[0]
+    scores = index["vectors"] @ q_vec  # cosine similarity (vetores já normalizados)
+    top_idx = np.argsort(scores)[::-1][:top_k]
+    results = []
+    for i in top_idx:
+        if scores[i] >= min_score:
+            results.append(index["chunks"][i])
+    return results
+
+
+def reload_indexes():
+    global knowledge_index, skills_index
+    knowledge_index = build_index(KNOWLEDGE_DIR)
+    skills_index = build_index(SKILLS_DIR)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BUSCA WEB — DuckDuckGo, sem API key
+# ═══════════════════════════════════════════════════════════════════════════
+def web_search(query, max_results=4):
+    try:
+        from ddgs import DDGS
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, region="br-pt", max_results=max_results))
+        if not results:
+            return ""
+        lines = []
+        for r in results:
+            title = r.get("title", "")
+            body = r.get("body", "")
+            url = r.get("href") or r.get("url", "")
+            lines.append(f"- {title}: {body} (Fonte: {url})")
+        return "\n".join(lines)
+    except Exception as e:
+        print(f"[THC LLM] Erro na busca web: {e}")
+        return ""
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Monta o system prompt combinando idioma + RAG + skills + web + modo
+# ═══════════════════════════════════════════════════════════════════════════
+def build_system_prompt(user_query, mode, use_web):
+    parts = [LANGUAGE_INSTRUCTION]
+
+    knowledge_hits = retrieve(user_query, knowledge_index, top_k=3)
+    if knowledge_hits:
+        block = "\n".join(f"- {h['text']}" for h in knowledge_hits)
+        parts.append(f"\n### Informações da loja (use se forem relevantes à pergunta):\n{block}")
+
+    skill_hits = retrieve(user_query, skills_index, top_k=2)
+    if skill_hits:
+        block = "\n".join(f"- {h['text']}" for h in skill_hits)
+        parts.append(f"\n### Instruções de comportamento a seguir:\n{block}")
+
+    if use_web:
+        web_results = web_search(user_query)
+        if web_results:
+            parts.append(
+                f"\n### Resultados de busca na web (cite a fonte quando usar):\n{web_results}"
+            )
+
+    if mode == "thinking":
+        parts.append(
+            "\nPense com cuidado, passo a passo, antes de responder. "
+            "Explique seu raciocínio brevemente e depois dê a resposta final de forma clara."
+        )
+
+    return "\n".join(parts)
+
 
 # ── Cache de UM modelo de texto por vez ───────────────────────────────────────
 _current = {"key": None, "tokenizer": None, "model": None, "backend": None}
@@ -160,9 +293,12 @@ def get_text_model(key: str):
     print(f"[THC LLM] Modelo {key} carregado!")
     return _current
 
-# Pré-carrega o modelo padrão no boot
+# Pré-carrega o modelo padrão e os índices RAG/Skills no boot
 print(f"[THC LLM] Pré-carregando modelo padrão ({DEFAULT_MODEL_KEY})...")
 get_text_model(DEFAULT_MODEL_KEY)
+
+print("[THC LLM] Construindo índices de conhecimento (RAG) e skills...")
+reload_indexes()
 
 # ── Modelo de IMAGEM ──────────────────────────────────────────────────────────
 IMAGE_MODEL_ID = "stabilityai/sd-turbo"
@@ -190,6 +326,7 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     model: Optional[str] = DEFAULT_MODEL_KEY
     mode: Optional[str] = "medium"
+    web: Optional[bool] = False
     messages: List[Message]
     max_tokens: Optional[int] = 512
     temperature: Optional[float] = 0.7
@@ -216,22 +353,25 @@ def list_models():
         "image_model": {"id": IMAGE_MODEL_ID},
     }
 
-# ── Aplica os modos Fast/Médio/Thinking ────────────────────────────────────────
-def apply_mode(mode, max_tokens, temperature, chat):
+@app.post("/v1/knowledge/reload")
+def reload_knowledge():
+    """Reprocessa os arquivos de /knowledge e /skills sem precisar reiniciar o Space."""
+    reload_indexes()
+    return {
+        "knowledge_chunks": len(knowledge_index["chunks"]),
+        "skills_chunks": len(skills_index["chunks"]),
+    }
+
+# ── Aplica os modos Fast/Médio/Thinking (parte de geração, não de conteúdo) ──
+def apply_mode(mode, max_tokens, temperature):
     do_sample = temperature > 0
     if mode == "fast":
-        return min(max_tokens, 256), False, None, chat
+        return min(max_tokens, 256), False, None
     elif mode == "thinking":
         t = min(temperature, 0.4) if temperature > 0 else 0.3
-        chat = [{
-            "role": "system",
-            "content": LANGUAGE_INSTRUCTION + " Pense com cuidado, passo a passo, "
-                        "antes de responder. Explique seu raciocínio brevemente e "
-                        "depois dê a resposta final de forma clara."
-        }] + chat
-        return max(max_tokens, 768), True, t, chat
+        return max(max_tokens, 768), True, t
     else:
-        return max_tokens, do_sample, (temperature if do_sample else None), chat
+        return max_tokens, do_sample, (temperature if do_sample else None)
 
 # ── Endpoints — Chat ────────────────────────────────────────────────────────────
 @app.post("/v1/chat/completions")
@@ -241,13 +381,12 @@ def chat_completions(req: ChatRequest):
         backend = state["backend"]
         chat = [{"role": m.role, "content": m.content} for m in req.messages]
 
-        # ── Garante idioma PT-BR em qualquer modo, pra qualquer modelo ───────
-        if req.mode != "thinking":
-            chat = [{"role": "system", "content": LANGUAGE_INSTRUCTION}] + chat
+        last_user_msg = next((m["content"] for m in reversed(chat) if m["role"] == "user"), "")
 
-        max_tokens, do_sample, temperature, chat = apply_mode(
-            req.mode, req.max_tokens, req.temperature, chat
-        )
+        system_content = build_system_prompt(last_user_msg, req.mode, req.web)
+        chat = [{"role": "system", "content": system_content}] + chat
+
+        max_tokens, do_sample, temperature = apply_mode(req.mode, req.max_tokens, req.temperature)
 
         t0 = time.time()
 
@@ -292,7 +431,7 @@ def chat_completions(req: ChatRequest):
             raise HTTPException(status_code=500, detail="Backend inválido")
 
         elapsed = time.time() - t0
-        print(f"[THC LLM] Resposta gerada em {elapsed:.1f}s ({backend})")
+        print(f"[THC LLM] Resposta gerada em {elapsed:.1f}s ({backend}, web={req.web})")
 
         return {
             "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
