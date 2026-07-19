@@ -38,8 +38,9 @@ def unload_current():
 
 def get_text_model(key: str) -> Dict[str, Any]:
     """Carrega e retorna um modelo de texto pelo key"""
-    # Importar exceções do app para evitar import circular
-    from app import ModelNotFoundError, ModelLoadError, BackendError, HTTPException
+    # Importar exceções do módulo exceptions para evitar import circular
+    from exceptions import ModelNotFoundError, ModelLoadError, BackendError
+    from fastapi import HTTPException
     
     if key not in TEXT_MODELS:
         raise ModelNotFoundError(f"Modelo desconhecido: {key}")
