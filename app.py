@@ -19,6 +19,10 @@ import numpy as np
 import httpx
 import asyncio
 
+# ── Import Configuration and Logger ───────────────────────────────────────────
+from config import TEXT_MODELS, DEFAULT_MODEL_KEY, IMAGE_MODEL_ID
+from logger import logger
+
 # ── Retry Configuration ───────────────────────────────────────────────────────
 import time
 from functools import wraps
@@ -79,17 +83,6 @@ def async_retry_with_backoff(max_retries=3, initial_delay=1, backoff_factor=2):
         return wrapper
     return decorator
 
-# ── Logging Configuration ─────────────────────────────────────────────────────
-import logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-    ]
-)
-logger = logging.getLogger("THC_LLM")
-
 # ── Custom Exceptions ───────────────────────────────────────────────────────────
 class THCError(HTTPException):
     """Base exception for THC LLM application"""
@@ -138,96 +131,6 @@ if hf_token:
     login(token=hf_token)
 
 app = FastAPI(title="THC LLM API")
-
-# ── Registro de modelos de TEXTO ──────────────────────────────────────────────
-TEXT_MODELS = {
-    "gemma-1b": {
-        "backend": "transformers",
-        "id": "google/gemma-3-1b-it",
-        "label": "Gemma 3 1B",
-        "desc": "Rápido • conversação geral",
-    },
-    "gemma-4b": {
-        "backend": "gguf",
-        "repo": "bartowski/google_gemma-3-4b-it-GGUF",
-        "file": "google_gemma-3-4b-it-Q4_K_M.gguf",
-        "label": "Gemma 3 4B",
-        "desc": "⚡ Rápido • bem mais forte que o 1B • ~2.5GB",
-    },
-    "gemma-12b": {
-        "backend": "gguf",
-        "repo": "bartowski/google_gemma-3-12b-it-GGUF",
-        "file": "google_gemma-3-12b-it-Q4_K_M.gguf",
-        "label": "Gemma 3 12B",
-        "desc": "🚀 Gemma mais forte • ~7.3GB",
-    },
-    "qwen-coder-3b": {
-        "backend": "transformers",
-        "id": "Qwen/Qwen2.5-Coder-3B-Instruct",
-        "label": "Qwen2.5-Coder 3B",
-        "desc": "Especialista em código",
-    },
-    "llama32-3b": {
-        "backend": "gguf",
-        "repo": "bartowski/Llama-3.2-3B-Instruct-GGUF",
-        "file": "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
-        "label": "Llama 3.2 3B",
-        "desc": "⚡ Rápido • teste e bate-papo • ~2GB",
-    },
-    "llama31-8b": {
-        "backend": "gguf",
-        "repo": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
-        "file": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
-        "label": "Llama 3.1 8B",
-        "desc": "Código + matemática • ~5GB",
-    },
-    "hermes3-8b": {
-        "backend": "gguf",
-        "repo": "NousResearch/Hermes-3-Llama-3.1-8B-GGUF",
-        "file": "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf",
-        "label": "Nous-Hermes 3 8B",
-        "desc": "Escrita criativa • ~5GB",
-    },
-    "qwen-14b-gguf": {
-        "backend": "gguf",
-        "repo": "bartowski/Qwen2.5-14B-Instruct-GGUF",
-        "file": "Qwen2.5-14B-Instruct-Q4_K_M.gguf",
-        "label": "Qwen2.5 14B GGUF",
-        "desc": "🔥 Mais forte • mais lento (~9GB)",
-    },
-    "deepseek-r1-distill-14b": {
-        "backend": "gguf",
-        "repo": "bartowski/DeepSeek-R1-Distill-Qwen-14B-GGUF",
-        "file": "DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf",
-        "label": "DeepSeek R1 Distill 14B",
-        "desc": "🧮 Raciocínio avançado • ~9GB GGUF",
-    },
-    "hy3-free": {
-        "backend": "kilo",
-        "model_id": "tencent/hy3:free",
-        "label": "Hy3 295B (free)",
-        "desc": "🔥 Kilo free • 295B MoE Tencent",
-    },
-    "nemotron-ultra-free": {
-        "backend": "kilo",
-        "model_id": "nvidia/nemotron-3-ultra-550b-a55b:free",
-        "label": "Nemotron Ultra 550B (free)",
-        "desc": "🚀 Kilo free • 550B NVIDIA",
-    },
-    "laguna-free": {
-        "backend": "kilo",
-        "model_id": "poolside/laguna-m.1:free",
-        "label": "Laguna M.1 (free)",
-        "desc": "⚡ Kilo free • Poolside",
-    },
-    "laguna-xs-free": {
-        "backend": "kilo",
-        "model_id": "poolside/laguna-xs-2.1:free",
-        "label": "Laguna XS 2.1 (free)",
-        "desc": "⚡ Kilo free • coding agent 33B",
-    },
-}
-DEFAULT_MODEL_KEY = "gemma-1b"
 
 LANGUAGE_INSTRUCTION = (
     "Responda SEMPRE em português do Brasil, independentemente do idioma da "
@@ -461,7 +364,6 @@ logger.info("Construindo índices de conhecimento (RAG) e skills...")
 reload_indexes()
 
 # ── Modelo de IMAGEM ──────────────────────────────────────────────────────────
-IMAGE_MODEL_ID = "stabilityai/sd-turbo"
 image_pipeline = None
 
 def get_image_pipeline():
@@ -501,6 +403,7 @@ class ChatRequest(BaseModel):
     @field_validator("model")
     @classmethod
     def model_exists(cls, v):
+        from config import TEXT_MODELS
         if v and v not in TEXT_MODELS:
             raise ValueError(f"Modelo '{v}' não encontrado. Modelos disponíveis: {list(TEXT_MODELS.keys())}")
         return v
@@ -533,6 +436,7 @@ def root():
 
 @app.get("/v1/models")
 def list_models():
+    from config import TEXT_MODELS, IMAGE_MODEL_ID
     return {
         "text_models": [
             {"key": k, "label": v["label"], "desc": v["desc"], "active": k == _current["key"]}
