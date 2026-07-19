@@ -10,4 +10,7 @@ safetensors
 pillow
 huggingface_hub
 llama-cpp-python
+sentence-transformers
+ddgs
+numpy
 
