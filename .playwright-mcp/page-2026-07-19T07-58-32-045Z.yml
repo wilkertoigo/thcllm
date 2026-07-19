@@ -1,0 +1,117 @@
+- generic [ref=e2]:
+  - banner [ref=e4]:
+    - generic [ref=e6]:
+      - heading "Spaces Hugging Face's logo HulkToigo / THCLLM like 0 Running" [level=1] [ref=e7]:
+        - generic [ref=e8]:
+          - link "Spaces" [ref=e9] [cursor=pointer]:
+            - /url: /spaces
+          - link [ref=e10] [cursor=pointer]:
+            - /url: /
+            - img "Hugging Face's logo" [ref=e11]
+        - separator [ref=e12]
+        - generic [ref=e13]:
+          - link [ref=e17] [cursor=pointer]:
+            - /url: /HulkToigo
+          - link "HulkToigo" [ref=e21] [cursor=pointer]:
+            - /url: /HulkToigo
+          - generic [ref=e22]: /
+        - generic [ref=e23]:
+          - link "THCLLM" [ref=e24] [cursor=pointer]:
+            - /url: /spaces/HulkToigo/THCLLM
+          - button "Copy space name to clipboard" [ref=e25] [cursor=pointer]
+        - generic [ref=e30]:
+          - button "like" [ref=e33] [cursor=pointer]
+          - button "0" [ref=e37] [cursor=pointer]
+        - generic [ref=e38]: Running
+        - button [ref=e45] [cursor=pointer]
+      - button [ref=e53] [cursor=pointer]
+  - main [ref=e56]:
+    - iframe [ref=e58]:
+      - generic [ref=f1e1]:
+        - generic [ref=f1e2]:
+          - generic [ref=f1e3]:
+            - heading "🤖 THC LLM" [level=2] [ref=f1e4]
+            - button "＋ Nova conversa" [ref=f1e5] [cursor=pointer]
+          - generic [ref=f1e7]:
+            - heading "⚙️ Configurações" [level=3] [ref=f1e8]
+            - generic [ref=f1e9]:
+              - generic [ref=f1e10]:
+                - text: Temperature
+                - generic [ref=f1e11]: "0.7"
+              - slider [ref=f1e12]: "0.7"
+            - generic [ref=f1e13]:
+              - generic [ref=f1e14]:
+                - text: Max Tokens
+                - generic [ref=f1e15]: "512"
+              - slider [ref=f1e16]: "512"
+            - generic [ref=f1e17]:
+              - generic [ref=f1e18]: System Prompt
+              - 'textbox "Ex: Você é o assistente da Tec Haze Circuit..." [ref=f1e19]'
+            - heading "🔊 Voz" [level=3] [ref=f1e20]
+            - generic [ref=f1e21]:
+              - generic [ref=f1e22]: Auto-falar respostas
+              - button [ref=f1e23] [cursor=pointer]
+            - generic [ref=f1e24]:
+              - generic [ref=f1e25]:
+                - text: Velocidade
+                - generic [ref=f1e26]: "1.0"
+                - text: x
+              - slider [ref=f1e27]: "1"
+            - generic [ref=f1e28]:
+              - generic [ref=f1e29]:
+                - text: Tom
+                - generic [ref=f1e30]: "1.0"
+              - slider [ref=f1e31]: "1"
+            - generic [ref=f1e32]:
+              - generic [ref=f1e33]: Voz
+              - combobox [ref=f1e34]:
+                - option "Carregando vozes..." [selected]
+        - generic [ref=f1e35]:
+          - generic [ref=f1e36]:
+            - button "☰" [ref=f1e37] [cursor=pointer]
+            - generic [ref=f1e38]:
+              - heading "Tec Haze Circuit" [level=1] [ref=f1e39]
+              - paragraph [ref=f1e40]: Hy3 295B (free) • CPU
+            - generic [ref=f1e41]:
+              - button "💬 Chat" [ref=f1e42] [cursor=pointer]
+              - button "🎨 Imagem" [ref=f1e43] [cursor=pointer]
+          - generic [ref=f1e45]:
+            - generic [ref=f1e46]: "Msgs: 0"
+            - generic [ref=f1e47]: "Enviados: 0"
+            - generic [ref=f1e48]: "Gerados: 0"
+            - generic [ref=f1e49]: "Total: 0"
+            - generic [ref=f1e50]: "Tempo: —"
+          - generic [ref=f1e51]:
+            - generic [ref=f1e52]:
+              - combobox [ref=f1e53] [cursor=pointer]:
+                - option "Gemma 3 1B — Rápido • conversação geral"
+                - option "Gemma 3 4B — ⚡ Rápido • bem mais forte que o 1B • ~2.5GB"
+                - option "Gemma 3 12B — 🚀 Gemma mais forte • ~7.3GB"
+                - option "Qwen2.5-Coder 3B — Especialista em código"
+                - option "Llama 3.2 3B — ⚡ Rápido • teste e bate-papo • ~2GB"
+                - option "Llama 3.1 8B — Código + matemática • ~5GB"
+                - option "Nous-Hermes 3 8B — Escrita criativa • ~5GB"
+                - option "Qwen2.5 14B GGUF — 🔥 Mais forte • mais lento (~9GB)"
+                - option "DeepSeek R1 Distill 14B — 🧮 Raciocínio avançado • ~9GB GGUF"
+                - option "Hy3 295B (free) — 🔥 Kilo free • 295B MoE Tencent" [selected]
+                - option "Nemotron Ultra 550B (free) — 🚀 Kilo free • 550B NVIDIA"
+                - option "Laguna M.1 (free) — ⚡ Kilo free • Poolside"
+                - option "Laguna XS 2.1 (free) — ⚡ Kilo free • coding agent 33B"
+              - generic [ref=f1e54]:
+                - button "🌐 Web" [ref=f1e55] [cursor=pointer]
+                - button "⚡ Fast" [ref=f1e56] [cursor=pointer]
+                - button "⚖️ Médio" [ref=f1e57] [cursor=pointer]
+                - button "🧠 Thinking" [ref=f1e58] [cursor=pointer]
+            - generic [ref=f1e60]:
+              - heading "THC LLM 🎙️" [level=2] [ref=f1e61]
+              - paragraph [ref=f1e62]: Fale ou escreva — o assistente responde em voz e texto!
+              - generic [ref=f1e63]:
+                - generic [ref=f1e64] [cursor=pointer]: Quais produtos vocês vendem?
+                - generic [ref=f1e65] [cursor=pointer]: Me ajude a escolher um produto
+                - generic [ref=f1e66] [cursor=pointer]: Formas de pagamento?
+                - generic [ref=f1e67] [cursor=pointer]: Como funciona a entrega?
+            - generic [ref=f1e68]:
+              - textbox "Digite ou fale..." [ref=f1e70]
+              - generic [ref=f1e72]:
+                - button "🎙️" [ref=f1e73] [cursor=pointer]
+                - button "➤" [ref=f1e74] [cursor=pointer]
