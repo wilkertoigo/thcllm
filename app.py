@@ -290,7 +290,7 @@ def get_text_model(key: str):
             llm = Llama.from_pretrained(
                 repo_id=repo,
                 filename=filename,
-                n_ctx=4096,
+                n_ctx=8192,
                 n_threads=2,
                 verbose=False,
             )
