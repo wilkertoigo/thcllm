@@ -254,12 +254,12 @@ def build_system_prompt(user_query, mode, use_web):
         f"nem use datas do seu treinamento para isso.",
     ]
 
-    knowledge_hits = retrieve(user_query, knowledge_index, top_k=3)
+    knowledge_hits = retrieve(user_query, get_knowledge_index(), top_k=3)
     if knowledge_hits:
         block = "\n".join(f"- {h['text']}" for h in knowledge_hits)
         parts.append(f"\n### Informações da loja (use se forem relevantes à pergunta):\n{block}")
 
-    skill_hits = retrieve(user_query, skills_index, top_k=2)
+    skill_hits = retrieve(user_query, get_skills_index(), top_k=2)
     if skill_hits:
         block = "\n".join(f"- {h['text']}" for h in skill_hits)
         parts.append(f"\n### Instruções de comportamento a seguir:\n{block}")
@@ -450,8 +450,8 @@ def reload_knowledge():
     """Reprocessa os arquivos de /knowledge e /skills sem precisar reiniciar o Space."""
     reload_indexes()
     return {
-        "knowledge_chunks": len(knowledge_index["chunks"]),
-        "skills_chunks": len(skills_index["chunks"]),
+        "knowledge_chunks": len(get_knowledge_index()["chunks"]),
+        "skills_chunks": len(get_skills_index()["chunks"]),
     }
 
 # ── Aplica os modos Fast/Médio/Thinking (parte de geração, não de conteúdo) ──
