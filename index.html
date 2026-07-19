@@ -301,35 +301,47 @@
     }
     .mode-tab.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
 
-    #image-view { display: none; flex: 1; flex-direction: column; overflow: hidden; }
-    #image-view.active { display: flex; }
+    #image-view, #audio-view { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+    #image-view.active, #audio-view.active { display: flex; }
 
-    #image-prompt-area {
+    #image-prompt-area, #audio-prompt-area {
       padding: 16px; background: var(--surface); border-bottom: 1px solid var(--border);
       display: flex; flex-direction: column; gap: 10px; flex-shrink: 0;
     }
-    #image-prompt {
+    #image-prompt, #audio-prompt {
       width: 100%; background: var(--surface2); border: 1px solid var(--border);
       border-radius: 12px; color: var(--text); padding: 12px 14px;
       font-size: 16px; resize: none; outline: none; font-family: inherit; height: 60px;
     }
-    #image-prompt:focus { border-color: var(--accent); }
+    #image-prompt:focus, #audio-prompt:focus { border-color: var(--accent); }
 
     .image-controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
     .image-controls .slider-group { flex: 1; min-width: 140px; }
     .image-controls label { font-size: 11px; }
 
-    #generate-img-btn {
+    #generate-img-btn, #generate-audio-btn {
       background: var(--accent); color: #000; border: none; border-radius: 10px;
       padding: 10px 20px; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0;
     }
-    #generate-img-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    #generate-img-btn:disabled, #generate-audio-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
     #image-gallery {
       flex: 1; overflow-y: auto; padding: 16px;
       display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
       gap: 16px; align-content: start; -webkit-overflow-scrolling: touch;
     }
+
+    #audio-gallery {
+      flex: 1; overflow-y: auto; padding: 16px;
+      display: flex; flex-direction: column; gap: 12px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .audio-card {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .audio-card audio { width: 100%; }
+    .audio-card-prompt { font-size: 12px; color: var(--muted); }
 
     .image-card {
       background: var(--surface2); border: 1px solid var(--border);
@@ -472,6 +484,7 @@
     <div class="mode-tabs">
       <button class="mode-tab active" id="tab-chat" onclick="switchMode('chat')">💬 Chat</button>
       <button class="mode-tab" id="tab-image" onclick="switchMode('image')">🎨 Imagem</button>
+      <button class="mode-tab" id="tab-audio" onclick="switchMode('audio')">🎵 Áudio</button>
     </div>
     <div class="status-dot"></div>
   </div>
@@ -558,6 +571,26 @@
       </div>
     </div>
   </div>
+
+  <!-- AUDIO VIEW -->
+  <div id="audio-view">
+    <div id="audio-prompt-area">
+      <textarea id="audio-prompt" placeholder="Descreva a música... ex: lo-fi hip hop instrumental, chuva ao fundo, clima noturno"></textarea>
+      <div class="image-controls">
+        <select id="audio-model">
+          <option value="lyria-pro-preview">Lyria 3 Pro (música completa) — pago ~$0.08</option>
+          <option value="lyria-clip-preview">Lyria 3 Clip (30s) — pago ~$0.04</option>
+        </select>
+        <button id="generate-audio-btn" onclick="generateAudio()">🎵 Gerar</button>
+      </div>
+    </div>
+    <div id="audio-gallery">
+      <div class="img-welcome">
+        <h2>🎵 Gerador de Música</h2>
+        <p>Modelos Lyria são pagos — confirme o custo por geração antes de usar.</p>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -623,9 +656,11 @@ function closeSidebarMobile() {
 function switchMode(mode) {
   document.getElementById('tab-chat').classList.toggle('active', mode==='chat');
   document.getElementById('tab-image').classList.toggle('active', mode==='image');
+  document.getElementById('tab-audio').classList.toggle('active', mode==='audio');
   document.getElementById('chat-view').style.display = mode==='chat' ? 'flex' : 'none';
   document.getElementById('image-view').classList.toggle('active', mode==='image');
-  if (mode === 'image') stopSpeaking();
+  document.getElementById('audio-view').classList.toggle('active', mode==='audio');
+  if (mode === 'image' || mode === 'audio') stopSpeaking();
 }
 
 // ── Modelos e Modo de raciocínio (Fast/Médio/Thinking) ───────────────────────
@@ -642,7 +677,7 @@ async function loadModelList() {
     const data = await res.json();
     const sel = document.getElementById('model-select');
     sel.innerHTML = '';
-    data.text_models.forEach(m => {
+    data.text_models.filter(m => !m.paid).forEach(m => {
       const opt = document.createElement('option');
       opt.value = m.key;
       opt.textContent = `${m.label} — ${m.desc}`;
@@ -1046,6 +1081,59 @@ function downloadImage(b64, prompt) {
   link.href = 'data:image/png;base64,' + b64;
   link.download = `thc-${prompt.slice(0,20).replace(/\s+/g,'-')}.png`;
   link.click();
+}
+
+// ── Geração de áudio ─────────────────────────────────────────────────────────
+async function generateAudio() {
+  const promptEl = document.getElementById('audio-prompt');
+  const prompt = promptEl.value.trim();
+  if (!prompt) return;
+
+  const model = document.getElementById('audio-model').value;
+  const btn = document.getElementById('generate-audio-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Gerando...';
+
+  const gallery = document.getElementById('audio-gallery');
+  document.querySelector('#audio-gallery .img-welcome')?.remove();
+
+  const loadingCard = document.createElement('div');
+  loadingCard.className = 'img-loading-card';
+  loadingCard.style.aspectRatio = 'auto';
+  loadingCard.style.padding = '20px';
+  loadingCard.innerHTML = `<div class="spinner"></div><span>Gerando música... (pode levar até 2min)</span>`;
+  gallery.prepend(loadingCard);
+
+  try {
+    const res = await fetch('/v1/audio/generations', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ prompt, model })
+    });
+
+    const data = await res.json();
+    loadingCard.remove();
+
+    if (!res.ok) {
+      alert('Erro ao gerar áudio: ' + (data.detail || 'Erro desconhecido'));
+      return;
+    }
+
+    const b64 = data.data[0].b64_json;
+    const card = document.createElement('div');
+    card.className = 'audio-card';
+    card.innerHTML = `
+      <audio controls src="data:audio/mp3;base64,${b64}"></audio>
+      <span class="audio-card-prompt" title="${prompt}">${prompt}</span>`;
+    gallery.prepend(card);
+
+  } catch (err) {
+    loadingCard.remove();
+    alert('Erro de conexão: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🎵 Gerar';
+  }
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────

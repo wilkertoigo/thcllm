@@ -2,7 +2,7 @@
 """Configuração independente sem imports circulares"""
 
 TEXT_MODELS = {
-    # ── KILO BACKEND (do maior para o menor porte) ────────────────────────────────────────
+    # ── KILO BACKEND (do maior para o menor porte) ──────────────────────────
     "nemotron-ultra-free": {
         "backend": "kilo",
         "model_id": "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -45,10 +45,30 @@ TEXT_MODELS = {
         "label": "North Mini Code (free)",
         "desc": "💻 Kilo free • Cohere coding",
     },
+    "openrouter-auto-free": {
+        "backend": "kilo",
+        "model_id": "openrouter/free",
+        "label": "OpenRouter Auto (free)",
+        "desc": "🎲 Kilo free • roteador automático",
+    },
+
+    # ── OPENROUTER BACKEND (texto, do maior para o menor porte) ─────────────
     "gemma4-31b-free": {
         "backend": "openrouter",
         "model_id": "google/gemma-4-31b-it:free",
         "label": "Gemma 4 31B (free)",
+        "desc": "🔥 OpenRouter free • Google",
+    },
+    "nemotron-nano30b-free": {
+        "backend": "openrouter",
+        "model_id": "nvidia/nemotron-3-nano-30b-a3b:free",
+        "label": "Nemotron Nano 30B (free)",
+        "desc": "⚡ OpenRouter free • rápido",
+    },
+    "gemma4-26b-free": {
+        "backend": "openrouter",
+        "model_id": "google/gemma-4-26b-a4b-it:free",
+        "label": "Gemma 4 26B A4B (free)",
         "desc": "🔥 OpenRouter free • Google",
     },
     "gptoss-20b-free": {
@@ -61,22 +81,46 @@ TEXT_MODELS = {
         "backend": "openrouter",
         "model_id": "nvidia/nemotron-nano-12b-v2-vl:free",
         "label": "Nemotron Nano 12B VL (free)",
-        "desc": "👁️ OpenRouter free • visão + texto",
+        "desc": "👁 OpenRouter free • visão + texto",
     },
-    "openrouter-auto-free": {
-        "backend": "kilo",
-        "model_id": "openrouter/free",
-        "label": "OpenRouter Auto (free)",
-        "desc": "🎲 Kilo free • roteador automático",
+    "nemotron-nano9b-free": {
+        "backend": "openrouter",
+        "model_id": "nvidia/nemotron-nano-9b-v2:free",
+        "label": "Nemotron Nano 9B (free)",
+        "desc": "⚡ OpenRouter free • ultra rápido",
     },
-    # ── TRANSFORMERS BACKEND ──────────────────────────────────────────────────────────────
+
+    # ── OPENROUTER BACKEND (áudio — geração de música, PAGO) ────────────────
+    "lyria-pro-preview": {
+        "backend": "openrouter",
+        "model_id": "google/lyria-3-pro-preview",
+        "label": "Lyria 3 Pro (áudio)",
+        "desc": "🎵 OpenRouter • geração de música (pago: $0.08/música)",
+        "paid": True,
+    },
+    "lyria-clip-preview": {
+        "backend": "openrouter",
+        "model_id": "google/lyria-3-clip-preview",
+        "label": "Lyria 3 Clip (áudio)",
+        "desc": "🎵 OpenRouter • geração de música curta (pago: $0.04/clipe)",
+        "paid": True,
+    },
+
+    # ── TRANSFORMERS BACKEND ─────────────────────────────────────────────────
     "gemma-1b": {
         "backend": "transformers",
         "id": "google/gemma-3-1b-it",
         "label": "Gemma 3 1B",
         "desc": "Rápido • conversação geral",
     },
-    # ── GGUF BACKEND ────────────────────────────────────────────────────────────────────────
+    "qwen-coder-3b": {
+        "backend": "transformers",
+        "id": "Qwen/Qwen2.5-Coder-3B-Instruct",
+        "label": "Qwen2.5-Coder 3B",
+        "desc": "Especialista em código",
+    },
+
+    # ── GGUF BACKEND ─────────────────────────────────────────────────────────
     "gemma-4b": {
         "backend": "gguf",
         "repo": "bartowski/google_gemma-3-4b-it-GGUF",
@@ -90,12 +134,6 @@ TEXT_MODELS = {
         "file": "google_gemma-3-12b-it-Q4_K_M.gguf",
         "label": "Gemma 3 12B",
         "desc": "🚀 Gemma mais forte • ~7.3GB",
-    },
-    "qwen-coder-3b": {
-        "backend": "transformers",
-        "id": "Qwen/Qwen2.5-Coder-3B-Instruct",
-        "label": "Qwen2.5-Coder 3B",
-        "desc": "Especialista em código",
     },
     "llama32-3b": {
         "backend": "gguf",

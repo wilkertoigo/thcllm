@@ -18,6 +18,7 @@ import traceback
 import numpy as np
 import httpx
 import asyncio
+import json
 
 # ── Import Configuration and Logger ───────────────────────────────────────────
 from config import TEXT_MODELS, DEFAULT_MODEL_KEY, IMAGE_MODEL_ID
@@ -293,6 +294,8 @@ class ChatRequest(BaseModel):
         from config import TEXT_MODELS
         if v and v not in TEXT_MODELS:
             raise ValueError(f"Modelo '{v}' não encontrado. Modelos disponíveis: {list(TEXT_MODELS.keys())}")
+        if v and TEXT_MODELS[v].get("model_id", "").startswith("google/lyria"):
+            raise ValueError(f"Modelo '{v}' é de geração de áudio — use /v1/audio/generations, não /v1/chat/completions")
         return v
 
     @field_validator("messages")
@@ -315,6 +318,22 @@ class ImageRequest(BaseModel):
             raise ValueError("prompt não pode estar vazio")
         return v.strip()
 
+class AudioRequest(BaseModel):
+    prompt: constr(min_length=1, max_length=2000) = Field(description="Prompt para geração de música")
+    model: Optional[str] = Field(default="lyria-pro-preview", description="Modelo de áudio (chave curta)")
+    image: Optional[str] = Field(default=None, description="Imagem de referência em base64 (opcional)")
+
+    @field_validator("model")
+    @classmethod
+    def model_is_audio(cls, v):
+        from config import TEXT_MODELS
+        if v not in TEXT_MODELS:
+            raise ValueError(f"Modelo '{v}' não encontrado")
+        model_id = TEXT_MODELS[v].get("model_id", "")
+        if not model_id.startswith("google/lyria"):
+            raise ValueError(f"Modelo '{v}' não é um modelo de geração de áudio (Lyria)")
+        return v
+
 # ── Endpoints — Geral ──────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 def root():
@@ -327,7 +346,15 @@ def list_models():
     current_key = get_current_model_key()
     return {
         "text_models": [
-            {"key": k, "label": v["label"], "desc": v["desc"], "active": k == current_key}
+            {
+                "key": k,
+                "label": v["label"],
+                "desc": v["desc"],
+                "active": k == current_key,
+                "backend": v["backend"],
+                "paid": v.get("paid", False),
+                "experimental": v.get("experimental", False),
+            }
             for k, v in TEXT_MODELS.items()
         ],
         "image_model": {"id": IMAGE_MODEL_ID},
@@ -437,9 +464,20 @@ def chat_completions(req: ChatRequest):
 
             resp = asyncio.run(call_kilo_api())
             if resp.status_code != 200:
-                raise APIError(f"Erro Kilo API: {resp.text}")
+                try:
+                    err_data = resp.json()
+                    err_msg = err_data.get("error", {}).get("message", resp.text)
+                except:
+                    err_msg = resp.text
+                raise APIError(f"Erro Kilo API ({resp.status_code}): {err_msg}")
 
             data = resp.json()
+            if "error" in data:
+                err_msg = data["error"].get("message", str(data))
+                raise APIError(f"Erro Kilo API: {err_msg}")
+            if "choices" not in data or not data["choices"]:
+                raise APIError(f"Resposta inválida da Kilo API: {data}")
+
             text = data["choices"][0]["message"]["content"]
             usage = data.get("usage", {})
             prompt_tokens = usage.get("prompt_tokens", 0)
@@ -475,9 +513,20 @@ def chat_completions(req: ChatRequest):
 
             resp = asyncio.run(call_openrouter_api())
             if resp.status_code != 200:
-                raise APIError(f"Erro OpenRouter API: {resp.text}")
+                try:
+                    err_data = resp.json()
+                    err_msg = err_data.get("error", {}).get("message", resp.text)
+                except:
+                    err_msg = resp.text
+                raise APIError(f"Erro OpenRouter API ({resp.status_code}): {err_msg}")
 
             data = resp.json()
+            if "error" in data:
+                err_msg = data["error"].get("message", str(data))
+                raise APIError(f"Erro OpenRouter API: {err_msg}")
+            if "choices" not in data or not data["choices"]:
+                raise APIError(f"Resposta inválida da OpenRouter API: {data}")
+
             text = data["choices"][0]["message"]["content"]
             usage = data.get("usage", {})
             prompt_tokens = usage.get("prompt_tokens", 0)
@@ -543,3 +592,88 @@ def generate_image(req: ImageRequest):
         err = traceback.format_exc()
         logger.error(f"Erro na geração de imagem: {err}")
         raise ImageGenerationError(str(e) + "\n" + err)
+
+# ── Endpoints — Geração de Áudio ────────────────────────────────────────────────
+@app.post("/v1/audio/generations")
+async def generate_audio(req: AudioRequest):
+    try:
+        model_id = TEXT_MODELS[req.model]["model_id"]
+        openrouter_api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not openrouter_api_key:
+            raise ConfigurationError("OPENROUTER_API_KEY não configurada")
+
+        headers = {
+            "Authorization": f"Bearer {openrouter_api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": model_id,
+            "messages": [{"role": "user", "content": req.prompt}],
+            "modalities": ["text", "audio"],
+            "stream": True,
+        }
+        if req.image:
+            payload["image"] = req.image
+
+        @async_retry_with_backoff(max_retries=3, initial_delay=1, backoff_factor=2)
+        async def call_audio_api():
+            async with httpx.AsyncClient() as client:
+                async with client.stream(
+                    "POST",
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    json=payload,
+                    headers=headers,
+                    timeout=120.0,
+                ) as resp:
+                    if resp.status_code != 200:
+                        body = await resp.aread()
+                        return resp.status_code, body, [], []
+
+                    audio_chunks, transcript_chunks = [], []
+                    async for line in resp.aiter_lines():
+                        if not line or not line.startswith("data: "):
+                            continue
+                        data = line[6:].strip()
+                        if data == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data)
+                        except json.JSONDecodeError:
+                            continue
+                        delta_audio = chunk.get("choices", [{}])[0].get("delta", {}).get("audio", {})
+                        if delta_audio.get("data"):
+                            audio_chunks.append(delta_audio["data"])
+                        if delta_audio.get("transcript"):
+                            transcript_chunks.append(delta_audio["transcript"])
+                    return 200, b"", audio_chunks, transcript_chunks
+
+        t0 = time.time()
+        status_code, err_body, audio_chunks, transcript_chunks = await call_audio_api()
+
+        if status_code != 200:
+            try:
+                err_data = json.loads(err_body) if err_body else {}
+                err_msg = err_data.get("error", {}).get("message", err_body.decode(errors="ignore"))
+            except Exception:
+                err_msg = err_body.decode(errors="ignore") if err_body else f"HTTP {status_code}"
+            raise APIError(f"Erro OpenRouter Audio ({status_code}): {err_msg}")
+
+        if not audio_chunks:
+            raise APIError("Nenhum áudio recebido da API (resposta vazia ou modelo indisponível)")
+
+        elapsed = time.time() - t0
+        full_audio_b64 = "".join(audio_chunks)
+
+        return {
+            "created": int(time.time()),
+            "elapsed_seconds": round(elapsed, 1),
+            "model": req.model,
+            "transcript": "".join(transcript_chunks) or None,
+            "data": [{"b64_json": full_audio_b64}],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        err = traceback.format_exc()
+        logger.error(f"Erro na geração de áudio: {err}")
+        raise APIError(str(e) + "\n" + err)
