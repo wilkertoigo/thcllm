@@ -213,7 +213,7 @@ def web_search(query, max_results=4):
 # ═══════════════════════════════════════════════════════════════════════════
 # Monta o system prompt combinando idioma + RAG + skills + web + modo
 # ═══════════════════════════════════════════════════════════════════════════
-def build_system_prompt(user_query, mode, use_web):
+def build_system_prompt(user_query, mode, use_web, free_mode=False):
     now = datetime.now(ZoneInfo("America/Sao_Paulo"))
     now_str = now.strftime("%A, %d de %B de %Y, %H:%M (horário de Brasília)")
 
@@ -224,15 +224,16 @@ def build_system_prompt(user_query, mode, use_web):
         f"nem use datas do seu treinamento para isso.",
     ]
 
-    knowledge_hits = retrieve(user_query, knowledge_index, top_k=3)
-    if knowledge_hits:
-        block = "\n".join(f"- {h['text']}" for h in knowledge_hits)
-        parts.append(f"\n### Informações da loja (use se forem relevantes à pergunta):\n{block}")
+    if not free_mode:
+        knowledge_hits = retrieve(user_query, knowledge_index, top_k=3)
+        if knowledge_hits:
+            block = "\n".join(f"- {h['text']}" for h in knowledge_hits)
+            parts.append(f"\n### Informações da loja (use se forem relevantes à pergunta):\n{block}")
 
-    skill_hits = retrieve(user_query, skills_index, top_k=2)
-    if skill_hits:
-        block = "\n".join(f"- {h['text']}" for h in skill_hits)
-        parts.append(f"\n### Instruções de comportamento a seguir:\n{block}")
+        skill_hits = retrieve(user_query, skills_index, top_k=2)
+        if skill_hits:
+            block = "\n".join(f"- {h['text']}" for h in skill_hits)
+            parts.append(f"\n### Instruções de comportamento a seguir:\n{block}")
 
     if use_web:
         web_results = web_search(user_query)
@@ -281,6 +282,7 @@ class ChatRequest(BaseModel):
     model: Optional[str] = Field(default=DEFAULT_MODEL_KEY, description="Modelo a ser usado")
     mode: Literal["fast", "medium", "thinking"] = Field(default="medium", description="Modo de geração")
     web: Optional[bool] = Field(default=False, description="Usar busca web")
+    free_mode: Optional[bool] = Field(default=False, description="Modo livre - pula RAG e persona")
     messages: List[Message] = Field(min_length=1, description="Lista de mensagens")
     max_tokens: Optional[int] = Field(default=512, ge=1, le=4096, description="Máximo de tokens")
     temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0, description="Temperatura de geração")
@@ -361,7 +363,7 @@ def chat_completions(req: ChatRequest):
 
         last_user_msg = next((m["content"] for m in reversed(chat) if m["role"] == "user"), "")
 
-        system_content = build_system_prompt(last_user_msg, req.mode, req.web)
+        system_content = build_system_prompt(last_user_msg, req.mode, req.web, req.free_mode)
         chat = [{"role": "system", "content": system_content}] + chat
 
         max_tokens, do_sample, temperature = apply_mode(req.mode, req.max_tokens, req.temperature)

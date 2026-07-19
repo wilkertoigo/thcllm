@@ -431,6 +431,13 @@
       <button class="toggle on" id="toggle-tts" onclick="toggleTTS(this)"></button>
     </div>
 
+    <h3>🔓 Modo Livre</h3>
+
+    <div class="toggle-row">
+      <span>Pular RAG e persona</span>
+      <button class="toggle" id="free-toggle-sidebar" onclick="setFreeMode(!freeModeEnabled)"></button>
+    </div>
+
     <div class="slider-group">
       <label>Velocidade <span id="rate-val">1.0</span>x</label>
       <input type="range" id="voice-rate" min="0.5" max="2" step="0.1" value="1.0"
@@ -486,6 +493,7 @@
       </select>
       <div class="mode-pills">
         <button class="mode-pill" id="web-toggle" onclick="toggleWeb()">🌐 Web</button>
+        <button class="mode-pill" id="free-toggle" onclick="toggleFreeMode()">🔓 Livre</button>
         <button class="mode-pill" data-mode="fast" onclick="setMode('fast')">⚡ Fast</button>
         <button class="mode-pill active" data-mode="medium" onclick="setMode('medium')">⚖️ Médio</button>
         <button class="mode-pill" data-mode="thinking" onclick="setMode('thinking')">🧠 Thinking</button>
@@ -576,11 +584,23 @@ let currentMode = 'medium';
 let currentModelKey = 'gemma-1b';
 let modelJustChanged = false;
 let webEnabled = false;
+let freeModeEnabled = false;
 
 // ── Web toggle ───────────────────────────────────────────────────────────────
 function toggleWeb() {
   webEnabled = !webEnabled;
   document.getElementById('web-toggle').classList.toggle('active', webEnabled);
+}
+
+// ── Free mode toggle ───────────────────────────────────────────────────────────
+function setFreeMode(value) {
+  freeModeEnabled = value;
+  document.getElementById('free-toggle').classList.toggle('active', freeModeEnabled);
+  document.getElementById('free-toggle-sidebar').classList.toggle('on', freeModeEnabled);
+}
+
+function toggleFreeMode() {
+  setFreeMode(!freeModeEnabled);
 }
 
 // ── Sidebar (desktop collapse / mobile drawer) ──────────────────────────────
@@ -920,6 +940,7 @@ async function sendMessage() {
         model: currentModelKey,
         mode: currentMode,
         web: webEnabled,
+        free_mode: freeModeEnabled,
         max_tokens: parseInt(document.getElementById('max-tokens').value),
         temperature: parseFloat(document.getElementById('temperature').value),
       })
