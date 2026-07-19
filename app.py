@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, Field, field_validator, constr
+from typing import List, Optional, Literal
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import torch
@@ -480,22 +480,50 @@ def get_image_pipeline():
 
 # ── Schemas ────────────────────────────────────────────────────────────────────
 class Message(BaseModel):
-    role: str
-    content: str
+    role: Literal["system", "user", "assistant"]
+    content: constr(min_length=1, max_length=10000)
+
+    @field_validator("content")
+    @classmethod
+    def content_not_empty(cls, v):
+        if not v or not v.strip():
+            raise ValueError("content não pode estar vazio")
+        return v.strip()
 
 class ChatRequest(BaseModel):
-    model: Optional[str] = DEFAULT_MODEL_KEY
-    mode: Optional[str] = "medium"
-    web: Optional[bool] = False
-    messages: List[Message]
-    max_tokens: Optional[int] = 512
-    temperature: Optional[float] = 0.7
+    model: Optional[str] = Field(default=DEFAULT_MODEL_KEY, description="Modelo a ser usado")
+    mode: Literal["fast", "medium", "thinking"] = Field(default="medium", description="Modo de geração")
+    web: Optional[bool] = Field(default=False, description="Usar busca web")
+    messages: List[Message] = Field(min_length=1, description="Lista de mensagens")
+    max_tokens: Optional[int] = Field(default=512, ge=1, le=4096, description="Máximo de tokens")
+    temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0, description="Temperatura de geração")
+
+    @field_validator("model")
+    @classmethod
+    def model_exists(cls, v):
+        if v and v not in TEXT_MODELS:
+            raise ValueError(f"Modelo '{v}' não encontrado. Modelos disponíveis: {list(TEXT_MODELS.keys())}")
+        return v
+
+    @field_validator("messages")
+    @classmethod
+    def messages_not_empty(cls, v):
+        if not v:
+            raise ValueError("messages não pode estar vazio")
+        return v
 
 class ImageRequest(BaseModel):
-    prompt: str
-    negative_prompt: Optional[str] = None
-    steps: Optional[int] = 2
-    size: Optional[int] = 512
+    prompt: constr(min_length=1, max_length=1000) = Field(description="Prompt para geração de imagem")
+    negative_prompt: Optional[constr(max_length=500)] = Field(default=None, description="Prompt negativo")
+    steps: Optional[int] = Field(default=2, ge=1, le=50, description="Número de passos de inferência")
+    size: Literal[256, 512, 768, 1024] = Field(default=512, description="Tamanho da imagem")
+
+    @field_validator("prompt")
+    @classmethod
+    def prompt_not_empty(cls, v):
+        if not v or not v.strip():
+            raise ValueError("prompt não pode estar vazio")
+        return v.strip()
 
 # ── Endpoints — Geral ──────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
