@@ -103,9 +103,15 @@ TEXT_MODELS = {
     },
     "laguna-free": {
         "backend": "kilo",
-        "model_id": "poolside/laguna-m-1:free",
+        "model_id": "poolside/laguna-m.1:free",
         "label": "Laguna M.1 (free)",
         "desc": "⚡ Kilo free • Poolside",
+    },
+    "laguna-xs-free": {
+        "backend": "kilo",
+        "model_id": "poolside/laguna-xs-2.1:free",
+        "label": "Laguna XS 2.1 (free)",
+        "desc": "⚡ Kilo free • coding agent 33B",
     },
 }
 DEFAULT_MODEL_KEY = "gemma-1b"
