@@ -285,76 +285,8 @@ def build_system_prompt(user_query, mode, use_web):
     return "\n".join(parts)
 
 
-# ── Cache de UM modelo de texto por vez ───────────────────────────────────────
-_current = {"key": None, "tokenizer": None, "model": None, "backend": None}
-
-def unload_current():
-    if _current.get("model") is not None:
-        logger.info(f"Descarregando modelo anterior ({_current['key']})...")
-    _current["key"] = None
-    _current["tokenizer"] = None
-    _current["model"] = None
-    _current["backend"] = None
-    gc.collect()
-
-def get_text_model(key: str):
-    if key not in TEXT_MODELS:
-        raise ModelNotFoundError(f"Modelo desconhecido: {key}")
-
-    if _current.get("key") == key and _current.get("model") is not None:
-        return _current
-
-    unload_current()
-
-    cfg = TEXT_MODELS[key]
-    backend = cfg["backend"]
-
-    try:
-        if backend == "transformers":
-            model_id = cfg["id"]
-            logger.info(f"Carregando modelo (transformers): {model_id}...")
-            tokenizer = AutoTokenizer.from_pretrained(model_id, token=hf_token, trust_remote_code=True)
-            model = AutoModelForCausalLM.from_pretrained(
-                model_id,
-                dtype=torch.float32,
-                device_map="cpu",
-                token=hf_token,
-                trust_remote_code=True,
-            )
-            model.eval()
-            _current.update({"key": key, "tokenizer": tokenizer, "model": model, "backend": "transformers"})
-
-        elif backend == "gguf":
-            from llama_cpp import Llama
-            repo = cfg['repo']
-            filename = cfg['file']
-            logger.info(f"Carregando GGUF: {repo}/{filename}...")
-
-            llm = Llama.from_pretrained(
-                repo_id=repo,
-                filename=filename,
-                n_ctx=8192,
-                n_threads=2,
-                verbose=False,
-            )
-            _current.update({"key": key, "tokenizer": None, "model": llm, "backend": "gguf"})
-
-        elif backend == "kilo":
-            model_id = cfg["model_id"]
-            logger.info(f"Backend HTTP (kilo): {model_id}...")
-            _current.update({"key": key, "tokenizer": None, "model": model_id, "backend": "kilo"})
-
-        else:
-            raise BackendError(f"Backend desconhecido: {backend}")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        unload_current()
-        raise ModelLoadError(f"Erro ao carregar {key}: {str(e)}") from e
-
-    logger.info(f"Modelo {key} carregado!")
-    return _current
+# ── Import Models Module ───────────────────────────────────────────────────────
+from models import get_text_model, get_image_pipeline, get_current_model_key
 
 # Pré-carrega o modelo padrão e os índices RAG/Skills no boot
 logger.info(f"Pré-carregando modelo padrão ({DEFAULT_MODEL_KEY})...")
@@ -362,23 +294,6 @@ get_text_model(DEFAULT_MODEL_KEY)
 
 logger.info("Construindo índices de conhecimento (RAG) e skills...")
 reload_indexes()
-
-# ── Modelo de IMAGEM ──────────────────────────────────────────────────────────
-image_pipeline = None
-
-def get_image_pipeline():
-    global image_pipeline
-    if image_pipeline is None:
-        from diffusers import AutoPipelineForText2Image
-        logger.info(f"Carregando modelo de imagem {IMAGE_MODEL_ID}...")
-        image_pipeline = AutoPipelineForText2Image.from_pretrained(
-            IMAGE_MODEL_ID,
-            torch_dtype=torch.float32,
-            token=hf_token,
-        )
-        image_pipeline.to("cpu")
-        logger.info("Modelo de imagem pronto!")
-    return image_pipeline
 
 # ── Schemas ────────────────────────────────────────────────────────────────────
 class Message(BaseModel):
@@ -437,9 +352,10 @@ def root():
 @app.get("/v1/models")
 def list_models():
     from config import TEXT_MODELS, IMAGE_MODEL_ID
+    current_key = get_current_model_key()
     return {
         "text_models": [
-            {"key": k, "label": v["label"], "desc": v["desc"], "active": k == _current["key"]}
+            {"key": k, "label": v["label"], "desc": v["desc"], "active": k == current_key}
             for k, v in TEXT_MODELS.items()
         ],
         "image_model": {"id": IMAGE_MODEL_ID},
