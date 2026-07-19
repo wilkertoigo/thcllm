@@ -19,6 +19,66 @@ import numpy as np
 import httpx
 import asyncio
 
+# ── Retry Configuration ───────────────────────────────────────────────────────
+import time
+from functools import wraps
+
+
+def retry_with_backoff(max_retries=3, initial_delay=1, backoff_factor=2):
+    """Decorator para retry com backoff exponencial (funções síncronas)"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            delay = initial_delay
+            last_exception = None
+            
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"Tentativa {attempt + 1}/{max_retries} falhou: {str(e)}. "
+                            f"Retrying em {delay}s..."
+                        )
+                        time.sleep(delay)
+                        delay *= backoff_factor
+                    else:
+                        logger.error(f"Todas as {max_retries} tentativas falharam: {str(e)}")
+            
+            raise last_exception
+        return wrapper
+    return decorator
+
+
+def async_retry_with_backoff(max_retries=3, initial_delay=1, backoff_factor=2):
+    """Decorator para retry com backoff exponencial (funções assíncronas)"""
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            delay = initial_delay
+            last_exception = None
+            
+            for attempt in range(max_retries):
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"Tentativa {attempt + 1}/{max_retries} falhou: {str(e)}. "
+                            f"Retrying em {delay}s..."
+                        )
+                        await asyncio.sleep(delay)
+                        delay *= backoff_factor
+                    else:
+                        logger.error(f"Todas as {max_retries} tentativas falharam: {str(e)}")
+            
+            raise last_exception
+        return wrapper
+    return decorator
+
 # ── Logging Configuration ─────────────────────────────────────────────────────
 import logging
 logging.basicConfig(
@@ -257,6 +317,7 @@ def reload_indexes():
 # ═══════════════════════════════════════════════════════════════════════════
 # BUSCA WEB — DuckDuckGo, sem API key
 # ═══════════════════════════════════════════════════════════════════════════
+@retry_with_backoff(max_retries=3, initial_delay=1, backoff_factor=2)
 def web_search(query, max_results=4):
     try:
         from ddgs import DDGS
@@ -543,6 +604,7 @@ def chat_completions(req: ChatRequest):
                 "temperature": temperature if temperature else 0.0,
             }
 
+            @async_retry_with_backoff(max_retries=3, initial_delay=1, backoff_factor=2)
             async def call_kilo_api():
                 async with httpx.AsyncClient() as client:
                     resp = await client.post(
