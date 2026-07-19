@@ -11,6 +11,8 @@ permissions:
 jobs:
   review:
     runs-on: ubuntu-latest
+    env:
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
     steps:
       - name: OpenRabbit
         uses: aryanbrite/openrabbit@main
