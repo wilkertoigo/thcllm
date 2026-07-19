@@ -173,13 +173,15 @@
     }
     #model-select:focus { border-color: var(--accent); }
 
-    .mode-pills { display: flex; gap: 4px; flex-shrink: 0; }
+    .mode-pills { display: flex; gap: 4px; flex-shrink: 0; flex-wrap: wrap; }
     .mode-pill {
       background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
       border-radius: 8px; padding: 7px 10px; font-size: 11px; cursor: pointer;
       transition: all 0.15s; white-space: nowrap;
     }
     .mode-pill.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+
+    #web-toggle.active { background: #2b7fff; color: #fff; border-color: #2b7fff; }
 
     .model-loading-hint {
       font-size: 10px; color: var(--muted); padding: 0 12px 6px;
@@ -483,6 +485,7 @@
         <option value="gemma-1b">Gemma 3 1B</option>
       </select>
       <div class="mode-pills">
+        <button class="mode-pill" id="web-toggle" onclick="toggleWeb()">🌐 Web</button>
         <button class="mode-pill" data-mode="fast" onclick="setMode('fast')">⚡ Fast</button>
         <button class="mode-pill active" data-mode="medium" onclick="setMode('medium')">⚖️ Médio</button>
         <button class="mode-pill" data-mode="thinking" onclick="setMode('thinking')">🧠 Thinking</button>
@@ -572,6 +575,13 @@ let currentUtterance = null;
 let currentMode = 'medium';
 let currentModelKey = 'gemma-1b';
 let modelJustChanged = false;
+let webEnabled = false;
+
+// ── Web toggle ───────────────────────────────────────────────────────────────
+function toggleWeb() {
+  webEnabled = !webEnabled;
+  document.getElementById('web-toggle').classList.toggle('active', webEnabled);
+}
 
 // ── Sidebar (desktop collapse / mobile drawer) ──────────────────────────────
 function toggleSidebar() {
@@ -601,7 +611,7 @@ function switchMode(mode) {
 // ── Modelos e Modo de raciocínio (Fast/Médio/Thinking) ───────────────────────
 function setMode(mode) {
   currentMode = mode;
-  document.querySelectorAll('.mode-pill').forEach(el => {
+  document.querySelectorAll('.mode-pill[data-mode]').forEach(el => {
     el.classList.toggle('active', el.dataset.mode === mode);
   });
 }
@@ -894,15 +904,10 @@ async function sendMessage() {
   thinkingWrapper.className = 'msg-wrapper assistant';
   const thinkingDiv = document.createElement('div');
   thinkingDiv.className = 'msg thinking dots';
-  thinkingDiv.textContent = '⏳ Pensando';
+  thinkingDiv.textContent = webEnabled ? '🌐 Buscando na web' : '⏳ Pensando';
   thinkingWrapper.appendChild(thinkingDiv);
   document.getElementById('chat').appendChild(thinkingWrapper);
   document.getElementById('chat').scrollTop = 99999;
-
-  const systemPrompt = document.getElementById('system-prompt').value.trim();
-  const messages = systemPrompt
-    ? [{role:'system', content:systemPrompt}, ...history]
-    : [...history];
 
   const t0 = Date.now();
 
@@ -911,9 +916,10 @@ async function sendMessage() {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        messages,
+        messages: history,
         model: currentModelKey,
         mode: currentMode,
+        web: webEnabled,
         max_tokens: parseInt(document.getElementById('max-tokens').value),
         temperature: parseFloat(document.getElementById('temperature').value),
       })
@@ -934,7 +940,7 @@ async function sendMessage() {
     saveCurrentConv();
 
     const tokMeta = usage.total_tokens
-      ? `${usage.completion_tokens} tok • ${(ms/1000).toFixed(1)}s`
+      ? `${usage.completion_tokens} tok • ${(ms/1000).toFixed(1)}s${webEnabled ? ' • 🌐' : ''}`
       : `${(ms/1000).toFixed(1)}s`;
 
     appendMessage('assistant', reply, tokMeta);
