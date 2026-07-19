@@ -19,6 +19,17 @@ import numpy as np
 import httpx
 import asyncio
 
+# ── Logging Configuration ─────────────────────────────────────────────────────
+import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+    ]
+)
+logger = logging.getLogger("THC_LLM")
+
 # ── Autenticação ──────────────────────────────────────────────────────────────
 hf_token = os.environ.get("HF_TOKEN")
 if hf_token:
@@ -139,9 +150,9 @@ def get_embed_model():
     global embed_model
     if embed_model is None:
         from sentence_transformers import SentenceTransformer
-        print(f"[THC LLM] Carregando modelo de embeddings ({EMBED_MODEL_ID})...")
+        logger.info(f"Carregando modelo de embeddings ({EMBED_MODEL_ID})...")
         embed_model = SentenceTransformer(EMBED_MODEL_ID)
-        print("[THC LLM] Modelo de embeddings pronto!")
+        logger.info("Modelo de embeddings pronto!")
     return embed_model
 
 
@@ -168,16 +179,16 @@ def build_index(directory):
             for chunk in chunk_text(content):
                 all_chunks.append({"text": chunk, "source": os.path.basename(f)})
         except Exception as e:
-            print(f"[THC LLM] Erro lendo {f}: {e}")
+            logger.error(f"Erro lendo {f}: {e}")
 
     if not all_chunks:
-        print(f"[THC LLM] Nenhum arquivo .md/.txt encontrado em /{directory} — RAG dessa pasta ficará vazio.")
+        logger.warning(f"Nenhum arquivo .md/.txt encontrado em /{directory} — RAG dessa pasta ficará vazio.")
         return {"chunks": [], "vectors": None}
 
     model = get_embed_model()
     texts = [c["text"] for c in all_chunks]
     vectors = model.encode(texts, normalize_embeddings=True)
-    print(f"[THC LLM] Indexado: {len(all_chunks)} trechos de /{directory}")
+    logger.info(f"Indexado: {len(all_chunks)} trechos de /{directory}")
     return {"chunks": all_chunks, "vectors": np.array(vectors)}
 
 
@@ -219,7 +230,7 @@ def web_search(query, max_results=4):
             lines.append(f"- {title}: {body} (Fonte: {url})")
         return "\n".join(lines)
     except Exception as e:
-        print(f"[THC LLM] Erro na busca web: {e}")
+        logger.error(f"Erro na busca web: {e}")
         return ""
 
 
@@ -273,7 +284,7 @@ _current = {"key": None, "tokenizer": None, "model": None, "backend": None}
 
 def unload_current():
     if _current.get("model") is not None:
-        print(f"[THC LLM] Descarregando modelo anterior ({_current['key']})...")
+        logger.info(f"Descarregando modelo anterior ({_current['key']})...")
     _current["key"] = None
     _current["tokenizer"] = None
     _current["model"] = None
@@ -295,7 +306,7 @@ def get_text_model(key: str):
     try:
         if backend == "transformers":
             model_id = cfg["id"]
-            print(f"[THC LLM] Carregando modelo (transformers): {model_id}...")
+            logger.info(f"Carregando modelo (transformers): {model_id}...")
             tokenizer = AutoTokenizer.from_pretrained(model_id, token=hf_token, trust_remote_code=True)
             model = AutoModelForCausalLM.from_pretrained(
                 model_id,
@@ -311,7 +322,7 @@ def get_text_model(key: str):
             from llama_cpp import Llama
             repo = cfg['repo']
             filename = cfg['file']
-            print(f"[THC LLM] Carregando GGUF: {repo}/{filename}...")
+            logger.info(f"Carregando GGUF: {repo}/{filename}...")
 
             llm = Llama.from_pretrained(
                 repo_id=repo,
@@ -324,7 +335,7 @@ def get_text_model(key: str):
 
         elif backend == "kilo":
             model_id = cfg["model_id"]
-            print(f"[THC LLM] Backend HTTP (kilo): {model_id}...")
+            logger.info(f"Backend HTTP (kilo): {model_id}...")
             _current.update({"key": key, "tokenizer": None, "model": model_id, "backend": "kilo"})
 
         else:
@@ -336,14 +347,14 @@ def get_text_model(key: str):
         unload_current()
         raise HTTPException(status_code=500, detail=f"Erro ao carregar {key}: {str(e)}") from e
 
-    print(f"[THC LLM] Modelo {key} carregado!")
+    logger.info(f"Modelo {key} carregado!")
     return _current
 
 # Pré-carrega o modelo padrão e os índices RAG/Skills no boot
-print(f"[THC LLM] Pré-carregando modelo padrão ({DEFAULT_MODEL_KEY})...")
+logger.info(f"Pré-carregando modelo padrão ({DEFAULT_MODEL_KEY})...")
 get_text_model(DEFAULT_MODEL_KEY)
 
-print("[THC LLM] Construindo índices de conhecimento (RAG) e skills...")
+logger.info("Construindo índices de conhecimento (RAG) e skills...")
 reload_indexes()
 
 # ── Modelo de IMAGEM ──────────────────────────────────────────────────────────
@@ -354,14 +365,14 @@ def get_image_pipeline():
     global image_pipeline
     if image_pipeline is None:
         from diffusers import AutoPipelineForText2Image
-        print(f"[THC LLM] Carregando modelo de imagem {IMAGE_MODEL_ID}...")
+        logger.info(f"Carregando modelo de imagem {IMAGE_MODEL_ID}...")
         image_pipeline = AutoPipelineForText2Image.from_pretrained(
             IMAGE_MODEL_ID,
             torch_dtype=torch.float32,
             token=hf_token,
         )
         image_pipeline.to("cpu")
-        print("[THC LLM] Modelo de imagem pronto!")
+        logger.info("Modelo de imagem pronto!")
     return image_pipeline
 
 # ── Schemas ────────────────────────────────────────────────────────────────────
@@ -514,7 +525,7 @@ def chat_completions(req: ChatRequest):
             raise HTTPException(status_code=500, detail="Backend inválido")
 
         elapsed = time.time() - t0
-        print(f"[THC LLM] Resposta gerada em {elapsed:.1f}s ({backend}, web={req.web})")
+        logger.info(f"Resposta gerada em {elapsed:.1f}s ({backend}, web={req.web})")
 
         return {
             "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
@@ -537,7 +548,7 @@ def chat_completions(req: ChatRequest):
         raise
     except Exception as e:
         err = traceback.format_exc()
-        print(f"[ERRO CHAT] {err}")
+        logger.error(f"Erro no chat: {err}")
         raise HTTPException(status_code=500, detail=str(e) + "\n" + err)
 
 # ── Endpoints — Geração de Imagem ──────────────────────────────────────────────
@@ -568,5 +579,5 @@ def generate_image(req: ImageRequest):
         }
     except Exception as e:
         err = traceback.format_exc()
-        print(f"[ERRO IMAGEM] {err}")
+        logger.error(f"Erro na geração de imagem: {err}")
         raise HTTPException(status_code=500, detail=str(e) + "\n" + err)
