@@ -13,4 +13,4 @@ llama-cpp-python
 sentence-transformers
 ddgs
 numpy
-
+tzdata
