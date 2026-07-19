@@ -1,0 +1,12 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "model": "openai/gemma-4b",
+  "provider": {
+    "openai": {
+      "options": {
+        "apiKey": "dummy",
+        "baseURL": "http://localhost:8000/v1"
+      }
+    }
+  }
+}
