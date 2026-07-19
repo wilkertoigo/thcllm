@@ -106,6 +106,44 @@ TEXT_MODELS = {
         "paid": True,
     },
 
+    # ── GROQ BACKEND ────────────────────────────────────────────────────────────────────────────────
+    "llama33-70b-groq": {
+        "backend": "groq",
+        "model_id": "llama-3.3-70b-versatile",
+        "label": "Llama 3.3 70B (Groq)",
+        "desc": "⚡ Groq free • ultra rápido, LPU",
+    },
+    "gptoss120b-groq": {
+        "backend": "groq",
+        "model_id": "openai/gpt-oss-120b",
+        "label": "GPT-OSS 120B (Groq)",
+        "desc": "🔥 Groq free • open-weight OpenAI",
+    },
+    "gptoss20b-groq": {
+        "backend": "groq",
+        "model_id": "openai/gpt-oss-20b",
+        "label": "GPT-OSS 20B (Groq)",
+        "desc": "⚡ Groq free • rápido",
+    },
+    "qwen36-27b-groq": {
+        "backend": "groq",
+        "model_id": "qwen/qwen3.6-27b",
+        "label": "Qwen3.6 27B (Groq)",
+        "desc": "🚀 Groq free • Alibaba via LPU",
+    },
+    "llama31-8b-groq": {
+        "backend": "groq",
+        "model_id": "llama-3.1-8b-instant",
+        "label": "Llama 3.1 8B (Groq)",
+        "desc": "⚡ Groq free • instant",
+    },
+    "compound-groq": {
+        "backend": "groq",
+        "model_id": "groq/compound",
+        "label": "Compound (Groq)",
+        "desc": "🛠️ Groq free • agente com tool-use nativo",
+    },
+
     # ── TRANSFORMERS BACKEND ─────────────────────────────────────────────────
     "gemma-1b": {
         "backend": "transformers",

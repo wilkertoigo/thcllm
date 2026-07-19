@@ -532,6 +532,55 @@ def chat_completions(req: ChatRequest):
             prompt_tokens = usage.get("prompt_tokens", 0)
             completion_tokens = usage.get("completion_tokens", 0)
 
+        elif backend == "groq":
+            model_id = state["model"]
+            groq_api_key = os.environ.get("GROQ_API_KEY")
+            if not groq_api_key:
+                raise ConfigurationError("GROQ_API_KEY não configurada")
+
+            headers = {
+                "Authorization": f"Bearer {groq_api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": model_id,
+                "messages": chat,
+                "max_tokens": max_tokens,
+                "temperature": temperature if temperature else 0.0,
+            }
+
+            @async_retry_with_backoff(max_retries=3, initial_delay=1, backoff_factor=2)
+            async def call_groq_api():
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        json=payload,
+                        headers=headers,
+                        timeout=60.0,
+                    )
+                    return resp
+
+            resp = asyncio.run(call_groq_api())
+            if resp.status_code != 200:
+                try:
+                    err_data = resp.json()
+                    err_msg = err_data.get("error", {}).get("message", resp.text)
+                except:
+                    err_msg = resp.text
+                raise APIError(f"Erro Groq API ({resp.status_code}): {err_msg}")
+
+            data = resp.json()
+            if "error" in data:
+                err_msg = data["error"].get("message", str(data))
+                raise APIError(f"Erro Groq API: {err_msg}")
+            if "choices" not in data or not data["choices"]:
+                raise APIError(f"Resposta inválida da Groq API: {data}")
+
+            text = data["choices"][0]["message"]["content"]
+            usage = data.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+
         else:
             raise BackendError("Backend inválido")
 
