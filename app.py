@@ -16,6 +16,8 @@ import gc
 import glob
 import traceback
 import numpy as np
+import httpx
+import asyncio
 
 # ── Autenticação ──────────────────────────────────────────────────────────────
 hf_token = os.environ.get("HF_TOKEN")
@@ -86,6 +88,24 @@ TEXT_MODELS = {
         "file": "DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf",
         "label": "DeepSeek R1 Distill 14B",
         "desc": "🧮 Raciocínio avançado • ~9GB GGUF",
+    },
+    "hy3-free": {
+        "backend": "kilo",
+        "model_id": "tencent/hy3:free",
+        "label": "Hy3 295B (free)",
+        "desc": "🔥 Kilo free • 295B MoE Tencent",
+    },
+    "nemotron-ultra-free": {
+        "backend": "kilo",
+        "model_id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "label": "Nemotron Ultra 550B (free)",
+        "desc": "🚀 Kilo free • 550B NVIDIA",
+    },
+    "laguna-free": {
+        "backend": "kilo",
+        "model_id": "poolside/laguna-m-1:free",
+        "label": "Laguna M.1 (free)",
+        "desc": "⚡ Kilo free • Poolside",
     },
 }
 DEFAULT_MODEL_KEY = "gemma-1b"
@@ -296,6 +316,11 @@ def get_text_model(key: str):
             )
             _current.update({"key": key, "tokenizer": None, "model": llm, "backend": "gguf"})
 
+        elif backend == "kilo":
+            model_id = cfg["model_id"]
+            print(f"[THC LLM] Backend HTTP (kilo): {model_id}...")
+            _current.update({"key": key, "tokenizer": None, "model": model_id, "backend": "kilo"})
+
         else:
             raise HTTPException(status_code=500, detail=f"Backend desconhecido: {backend}")
 
@@ -439,6 +464,43 @@ def chat_completions(req: ChatRequest):
             )
             text = result["choices"][0]["message"]["content"]
             usage = result.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+
+        elif backend == "kilo":
+            model_id = state["model"]
+            kilo_api_key = os.environ.get("KILO_API_KEY")
+            if not kilo_api_key:
+                raise HTTPException(status_code=500, detail="KILO_API_KEY não configurada")
+
+            headers = {
+                "Authorization": f"Bearer {kilo_api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": model_id,
+                "messages": chat,
+                "max_tokens": max_tokens,
+                "temperature": temperature if temperature else 0.0,
+            }
+
+            async def call_kilo_api():
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(
+                        "https://api.kilo.ai/api/gateway/v1/chat/completions",
+                        json=payload,
+                        headers=headers,
+                        timeout=60.0,
+                    )
+                    return resp
+
+            resp = asyncio.run(call_kilo_api())
+            if resp.status_code != 200:
+                raise HTTPException(status_code=500, detail=f"Erro Kilo API: {resp.text}")
+
+            data = resp.json()
+            text = data["choices"][0]["message"]["content"]
+            usage = data.get("usage", {})
             prompt_tokens = usage.get("prompt_tokens", 0)
             completion_tokens = usage.get("completion_tokens", 0)
 

@@ -14,3 +14,4 @@ sentence-transformers
 ddgs
 numpy
 tzdata
+httpx
