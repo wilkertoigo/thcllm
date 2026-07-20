@@ -477,7 +477,10 @@ def reload_knowledge():
 def download_cli():
     path = "dist/thc-cli.tar.gz"
     if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="Pacote ainda não foi gerado. Rode scripts/build_release.sh")
+        os.makedirs("dist", exist_ok=True)
+        import tarfile
+        with tarfile.open(path, "w:gz") as tar:
+            tar.add("thc_cli", arcname="thc_cli", filter=lambda ti: None if "__pycache__" in ti.name else ti)
     return FileResponse(path, media_type="application/gzip", filename="thc-cli.tar.gz")
 
 @app.get("/install.sh")
