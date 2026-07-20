@@ -16,3 +16,4 @@ numpy
 tzdata
 httpx
 python-multipart
+itsdangerous

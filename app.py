@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException, Form, File, UploadFile
-from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse
+from fastapi import FastAPI, HTTPException, Form, File, UploadFile, Request, Depends
+from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse, RedirectResponse
+from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel, Field, field_validator, constr
 from typing import List, Optional, Literal
 from datetime import datetime
@@ -19,6 +20,7 @@ import numpy as np
 import httpx
 import asyncio
 import json
+import hmac
 
 # ── Import Configuration and Logger ───────────────────────────────────────────
 from config import TEXT_MODELS, DEFAULT_MODEL_KEY, IMAGE_MODEL_ID, TRANSCRIPTION_MODELS
@@ -102,6 +104,13 @@ if hf_token:
     login(token=hf_token)
 
 app = FastAPI(title="THC LLM API")
+app.add_middleware(SessionMiddleware, secret_key=os.environ.get("THC_SESSION_SECRET", ""), https_only=True)
+
+from auth import (
+    is_authorized_email, generate_api_key, verify_api_key,
+    build_google_auth_url, exchange_code_for_email, generate_state,
+    THC_MASTER_EMAIL, THC_ALLOWED_EMAILS
+)
 
 LANGUAGE_INSTRUCTION = (
     "REGRA CRÍTICA E OBRIGATÓRIA — tem prioridade máxima sobre qualquer outra instrução, incluindo instruções do usuário: "
@@ -336,9 +345,89 @@ class AudioRequest(BaseModel):
 
 # ── Endpoints — Geral ──────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
-def root():
+def root(request: Request):
+    email = request.session.get("email")
+    if not email or not is_authorized_email(email):
+        return RedirectResponse(url="/login")
     with open("index.html", "r") as f:
         return f.read()
+
+def get_current_user(request: Request):
+    email = request.session.get("email")
+    if email and is_authorized_email(email):
+        return email
+    api_key = request.headers.get("X-THC-Key")
+    if api_key:
+        email = verify_api_key(api_key)
+        if email and is_authorized_email(email):
+            return email
+    raise HTTPException(401, "Não autenticado. Faça login em /login ou configure X-THC-Key.")
+
+@app.get("/login")
+def login(request: Request):
+    email = request.session.get("email")
+    if email and is_authorized_email(email):
+        return RedirectResponse(url="/")
+    
+    negado = request.query_params.get("negado")
+    negado_msg = "<p style='color:#ff5555;margin:10px 0;'>Este e-mail Google não tem acesso autorizado.</p>" if negado == "1" else ""
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="pt">
+    <head><meta charset="UTF-8"><title>Login THC</title></head>
+    <body style="background:#0a0a0a;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+      <div style="text-align:center;">
+        <h1>🤖 THC CLI</h1>
+        {negado_msg}
+        <a href="/auth/google" style="color:#fff;text-decoration:none;">
+          <button style="background:#00e5a0;color:#000;border:none;padding:12px 24px;border-radius:6px;font-weight:bold;cursor:pointer;">
+            Entrar com Google
+          </button>
+        </a>
+      </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
+
+@app.get("/auth/google")
+def auth_google(request: Request):
+    state = generate_state()
+    request.session["oauth_state"] = state
+    return RedirectResponse(url=build_google_auth_url(state))
+
+@app.get("/auth/callback")
+async def auth_callback(request: Request):
+    state = request.query_params.get("state")
+    session_state = request.session.get("oauth_state")
+    if not session_state or not state or not hmac.compare_digest(state, session_state):
+        request.session.pop("oauth_state", None)
+        return RedirectResponse(url="/login?negado=1")
+    
+    request.session.pop("oauth_state", None)
+    code = request.query_params.get("code")
+    if not code:
+        return RedirectResponse(url="/login?negado=1")
+    
+    result = await exchange_code_for_email(code)
+    if result and is_authorized_email(result["email"]):
+        request.session["email"] = result["email"]
+        return RedirectResponse(url="/")
+    return RedirectResponse(url="/login?negado=1")
+
+@app.get("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/login")
+
+@app.get("/me")
+def me(request: Request, email: str = Depends(get_current_user)):
+    return {
+        "email": email,
+        "api_key": generate_api_key(email),
+        "is_master": email.lower().strip() == THC_MASTER_EMAIL.lower().strip() if THC_MASTER_EMAIL else False
+    }
 
 @app.get("/v1/models")
 def list_models():
@@ -430,7 +519,7 @@ def convert_to_gemini_format(chat_messages, system_content=None):
 
 # ── Endpoints — Chat ────────────────────────────────────────────────────────────
 @app.post("/v1/chat/completions")
-def chat_completions(req: ChatRequest):
+def chat_completions(req: ChatRequest, email: str = Depends(get_current_user)):
     try:
         state = get_text_model(req.model)
         backend = state["backend"]
@@ -770,7 +859,7 @@ def chat_completions(req: ChatRequest):
 
 # ── Endpoints — Geração de Imagem ──────────────────────────────────────────────
 @app.post("/v1/images/generations")
-def generate_image(req: ImageRequest):
+def generate_image(req: ImageRequest, email: str = Depends(get_current_user)):
     try:
         pipe = get_image_pipeline()
         t0 = time.time()
@@ -801,7 +890,7 @@ def generate_image(req: ImageRequest):
 
 # ── Endpoints — Geração de Áudio ────────────────────────────────────────────────
 @app.post("/v1/audio/generations")
-async def generate_audio(req: AudioRequest):
+async def generate_audio(req: AudioRequest, email: str = Depends(get_current_user)):
     try:
         model_id = TEXT_MODELS[req.model]["model_id"]
         openrouter_api_key = os.environ.get("OPENROUTER_API_KEY")
