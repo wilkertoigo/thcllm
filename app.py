@@ -380,7 +380,7 @@ def login(request: Request):
       <div style="text-align:center;">
         <h1>🤖 THC CLI</h1>
         {negado_msg}
-        <a href="/auth/google" style="color:#fff;text-decoration:none;">
+        <a href="/auth/google" target="_top" style="color:#fff;text-decoration:none;">
           <button style="background:#00e5a0;color:#000;border:none;padding:12px 24px;border-radius:6px;font-weight:bold;cursor:pointer;">
             Entrar com Google
           </button>
