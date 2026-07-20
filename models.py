@@ -97,6 +97,11 @@ def get_text_model(key: str) -> Dict[str, Any]:
             logger.info(f"Backend HTTP (groq): {model_id}...")
             _current.update({"key": key, "tokenizer": None, "model": model_id, "backend": "groq"})
 
+        elif backend == "mistral":
+            model_id = cfg["model_id"]
+            logger.info(f"Backend HTTP (mistral): {model_id}...")
+            _current.update({"key": key, "tokenizer": None, "model": model_id, "backend": "mistral"})
+
         else:
             raise BackendError(f"Backend desconhecido: {backend}")
 

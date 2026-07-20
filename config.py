@@ -144,6 +144,44 @@ TEXT_MODELS = {
         "desc": "🛠️ Groq free • agente com tool-use nativo",
     },
 
+    # ── MISTRAL BACKEND ────────────────────────────────────────────────────────────────────────────────
+    "mistral-small-mst": {
+        "backend": "mistral",
+        "model_id": "mistral-small-latest",
+        "label": "Mistral Small (free)",
+        "desc": "🇫🇷 Mistral free • geral",
+    },
+    "open-nemo-mst": {
+        "backend": "mistral",
+        "model_id": "open-mistral-nemo",
+        "label": "Mistral Nemo (free)",
+        "desc": "🇫🇷 Mistral free • open-weight",
+    },
+    "ministral8b-mst": {
+        "backend": "mistral",
+        "model_id": "ministral-8b-latest",
+        "label": "Ministral 8B (free)",
+        "desc": "⚡ Mistral free • rápido",
+    },
+    "ministral3b-mst": {
+        "backend": "mistral",
+        "model_id": "ministral-3b-latest",
+        "label": "Ministral 3B (free)",
+        "desc": "⚡ Mistral free • ultra rápido",
+    },
+    "devstral-mst": {
+        "backend": "mistral",
+        "model_id": "devstral-latest",
+        "label": "Devstral (free)",
+        "desc": "💻 Mistral free • especialista código",
+    },
+    "magistral-small-mst": {
+        "backend": "mistral",
+        "model_id": "magistral-small-latest",
+        "label": "Magistral Small (free)",
+        "desc": "🧠 Mistral free • reasoning",
+    },
+
     # ── TRANSFORMERS BACKEND ─────────────────────────────────────────────────
     "gemma-1b": {
         "backend": "transformers",

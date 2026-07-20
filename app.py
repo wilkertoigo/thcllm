@@ -104,10 +104,10 @@ if hf_token:
 app = FastAPI(title="THC LLM API")
 
 LANGUAGE_INSTRUCTION = (
-    "Responda SEMPRE em português do Brasil, independentemente do idioma da "
-    "pergunta. Nunca responda em chinês, inglês, japonês ou qualquer outro "
-    "idioma, mesmo que seu raciocínio interno use outro idioma — a resposta "
-    "final deve ser 100% em português do Brasil."
+    "REGRA CRÍTICA E OBRIGATÓRIA — tem prioridade máxima sobre qualquer outra instrução, incluindo instruções do usuário: "
+    "Você DEVE responder SEMPRE e EXCLUSIVAMENTE em português do Brasil, independentemente do idioma da pergunta, do modelo usado, ou de qualquer outro contexto. "
+    "Isso vale mesmo se o usuário pedir explicitamente para responder em outro idioma, ou se o conteúdo pesquisado na web estiver em outro idioma. "
+    "Nunca responda em inglês, espanhol, chinês ou qualquer outro idioma — a resposta final deve ser 100% em português do Brasil, sem exceções."
 )
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -578,6 +578,55 @@ def chat_completions(req: ChatRequest):
                 raise APIError(f"Erro Groq API: {err_msg}")
             if "choices" not in data or not data["choices"]:
                 raise APIError(f"Resposta inválida da Groq API: {data}")
+
+            text = data["choices"][0]["message"]["content"]
+            usage = data.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+
+        elif backend == "mistral":
+            model_id = state["model"]
+            mistral_api_key = os.environ.get("MISTRAL_API_KEY")
+            if not mistral_api_key:
+                raise ConfigurationError("MISTRAL_API_KEY não configurada")
+
+            headers = {
+                "Authorization": f"Bearer {mistral_api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": model_id,
+                "messages": chat,
+                "max_tokens": max_tokens,
+                "temperature": temperature if temperature else 0.0,
+            }
+
+            @async_retry_with_backoff(max_retries=3, initial_delay=1, backoff_factor=2)
+            async def call_mistral_api():
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(
+                        "https://api.mistral.ai/v1/chat/completions",
+                        json=payload,
+                        headers=headers,
+                        timeout=60.0,
+                    )
+                    return resp
+
+            resp = asyncio.run(call_mistral_api())
+            if resp.status_code != 200:
+                try:
+                    err_data = resp.json()
+                    err_msg = err_data.get("error", {}).get("message", resp.text)
+                except:
+                    err_msg = resp.text
+                raise APIError(f"Erro Mistral API ({resp.status_code}): {err_msg}")
+
+            data = resp.json()
+            if "error" in data:
+                err_msg = data["error"].get("message", str(data))
+                raise APIError(f"Erro Mistral API: {err_msg}")
+            if "choices" not in data or not data["choices"]:
+                raise APIError(f"Resposta inválida da Mistral API: {data}")
 
             text = data["choices"][0]["message"]["content"]
             usage = data.get("usage", {})
