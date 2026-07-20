@@ -549,6 +549,9 @@ def chat_completions(req: ChatRequest):
                 "temperature": temperature if temperature else 0.0,
             }
 
+            payload_bytes = len(json.dumps(payload))
+            logger.info(f"[GROQ DEBUG] Payload size: {payload_bytes} bytes, Messages: {len(chat)}")
+
             @async_retry_with_backoff(max_retries=3, initial_delay=1, backoff_factor=2)
             async def call_groq_api():
                 async with httpx.AsyncClient() as client:
