@@ -183,47 +183,53 @@ TEXT_MODELS = {
     },
 
     # ── GEMINI BACKEND ────────────────────────────────────────────────────────────────────────
-    "gemini-flash-latest": {
-        "backend": "gemini",
-        "model_id": "gemini-flash-latest",
-        "label": "Gemini Flash (latest)",
-        "desc": "✨ Google free • alias sempre atualizado",
-    },
-    "gemini-flash-lite-latest": {
-        "backend": "gemini",
-        "model_id": "gemini-flash-lite-latest",
-        "label": "Gemini Flash Lite (latest)",
-        "desc": "⚡ Google free • leve, cota maior",
-    },
-    "gemini35-flash": {
-        "backend": "gemini",
-        "model_id": "gemini-3.5-flash",
-        "label": "Gemini 3.5 Flash",
-        "desc": "✨ Google free • mais recente",
-    },
-    "gemini31-flash-lite": {
-        "backend": "gemini",
-        "model_id": "gemini-3.1-flash-lite",
-        "label": "Gemini 3.1 Flash Lite",
-        "desc": "⚡ Google free • leve, cota maior",
-    },
-    "gemini3-flash-preview": {
-        "backend": "gemini",
-        "model_id": "gemini-3-flash-preview",
-        "label": "Gemini 3 Flash Preview",
-        "desc": "🔬 Google free • preview",
-    },
     "gemma4-26b-google": {
         "backend": "gemini",
         "model_id": "gemma-4-26b-a4b-it",
         "label": "Gemma 4 26B (Google direto)",
         "desc": "🔥 Google free • sem thinkingConfig",
+        "rpd": 14400,
+        "rpm": 30,
     },
     "gemma4-31b-google": {
         "backend": "gemini",
         "model_id": "gemma-4-31b-it",
         "label": "Gemma 4 31B (Google direto)",
         "desc": "🔥 Google free • sem thinkingConfig",
+        "rpd": 14400,
+        "rpm": 30,
+    },
+    "gemini31-flash-lite": {
+        "backend": "gemini",
+        "model_id": "gemini-3.1-flash-lite",
+        "label": "Gemini 3.1 Flash Lite",
+        "desc": "⚡ Google free • leve, cota maior",
+        "rpd": 500,
+        "rpm": 15,
+    },
+    "gemini35-flash": {
+        "backend": "gemini",
+        "model_id": "gemini-3.5-flash",
+        "label": "Gemini 3.5 Flash",
+        "desc": "✨ Google free • mais recente",
+        "rpd": 20,
+        "rpm": 5,
+    },
+    "gemini3-flash-preview": {
+        "backend": "gemini",
+        "model_id": "gemini-3-flash-preview",
+        "label": "Gemini 3 Flash Preview",
+        "desc": "🔬 Google free • preview",
+        "rpd": 20,
+        "rpm": 5,
+    },
+    "gemini-flash-lite-latest": {
+        "backend": "gemini",
+        "model_id": "gemini-flash-lite-latest",
+        "label": "Gemini Flash Lite (latest)",
+        "desc": "⚡ Google free • leve, 20/dia",
+        "rpd": 20,
+        "rpm": 10,
     },
 
     # ── TRANSFORMERS BACKEND ─────────────────────────────────────────────────
