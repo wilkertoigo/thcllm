@@ -285,7 +285,7 @@ class ChatRequest(BaseModel):
     web: Optional[bool] = Field(default=False, description="Usar busca web")
     free_mode: Optional[bool] = Field(default=False, description="Modo livre - pula RAG e persona")
     messages: List[Message] = Field(min_length=1, description="Lista de mensagens")
-    max_tokens: Optional[int] = Field(default=1024, ge=1, le=16384, description="Máximo de tokens")
+    max_tokens: Optional[int] = Field(default=8192, ge=1, le=16384, description="Máximo de tokens")
     temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0, description="Temperatura de geração")
 
     @field_validator("model")
