@@ -632,6 +632,8 @@ def chat_completions(req: ChatRequest):
             usage = data.get("usage", {})
             prompt_tokens = usage.get("prompt_tokens", 0)
             completion_tokens = usage.get("completion_tokens", 0)
+            finish_reason = data["choices"][0].get("finish_reason", "unknown")
+            logger.info(f"[MISTRAL DEBUG] finish_reason={finish_reason}, completion_tokens={completion_tokens}, max_tokens_sent={max_tokens}")
 
         else:
             raise BackendError("Backend inválido")
