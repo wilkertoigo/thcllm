@@ -380,6 +380,27 @@ def apply_mode(mode, max_tokens, temperature):
     else:
         return max_tokens, do_sample, (temperature if do_sample else None)
 
+# ── Helper: Converte formato OpenAI → Gemini ─────────────────────────────────────
+def convert_to_gemini_format(chat_messages, system_content=None):
+    """Converte mensagens do formato OpenAI para o formato Gemini"""
+    contents = []
+    for msg in chat_messages:
+        role = "model" if msg["role"] == "assistant" else "user"
+        contents.append({
+            "role": role,
+            "parts": [{"text": msg["content"]}]
+        })
+
+    payload = {"contents": contents}
+
+    if system_content:
+        payload["systemInstruction"] = {
+            "parts": [{"text": system_content}],
+            "role": "system"
+        }
+
+    return payload
+
 # ── Endpoints — Chat ────────────────────────────────────────────────────────────
 @app.post("/v1/chat/completions")
 def chat_completions(req: ChatRequest):
@@ -634,6 +655,56 @@ def chat_completions(req: ChatRequest):
             completion_tokens = usage.get("completion_tokens", 0)
             finish_reason = data["choices"][0].get("finish_reason", "unknown")
             logger.info(f"[MISTRAL DEBUG] finish_reason={finish_reason}, completion_tokens={completion_tokens}, max_tokens_sent={max_tokens}")
+
+        elif backend == "gemini":
+            model_id = state["model"]
+            google_studio_key = os.environ.get("GOOGLE_STUDIO_API_KEY")
+            if not google_studio_key:
+                raise ConfigurationError("GOOGLE_STUDIO_API_KEY não configurada")
+
+            gemini_payload = convert_to_gemini_format(chat, system_content)
+            gemini_payload["generationConfig"] = {
+                "maxOutputTokens": max_tokens,
+                "temperature": temperature if temperature else 0.0,
+            }
+
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={google_studio_key}"
+
+            @async_retry_with_backoff(max_retries=3, initial_delay=1, backoff_factor=2)
+            async def call_gemini_api():
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(
+                        url,
+                        json=gemini_payload,
+                        headers={"Content-Type": "application/json"},
+                        timeout=60.0,
+                    )
+                    return resp
+
+            resp = asyncio.run(call_gemini_api())
+            if resp.status_code != 200:
+                try:
+                    err_data = resp.json()
+                    err_msg = err_data.get("error", {}).get("message", resp.text)
+                except:
+                    err_msg = resp.text
+                raise APIError(f"Erro Gemini API ({resp.status_code}): {err_msg}")
+
+            data = resp.json()
+            if "error" in data:
+                err_msg = data["error"].get("message", str(data))
+                raise APIError(f"Erro Gemini API: {err_msg}")
+            if "candidates" not in data or not data["candidates"]:
+                raise APIError(f"Resposta inválida da Gemini API: {data}")
+
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            usage = data.get("usageMetadata", {})
+            prompt_tokens = usage.get("promptTokenCount", 0)
+            completion_tokens = usage.get("candidatesTokenCount", 0)
+
+            finish_reason = "stop"
+            if data["candidates"][0].get("finishReason") == "MAX_TOKENS":
+                finish_reason = "length"
 
         else:
             raise BackendError("Backend inválido")

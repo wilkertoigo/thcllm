@@ -182,6 +182,32 @@ TEXT_MODELS = {
         "desc": "🧠 Mistral free • reasoning",
     },
 
+    # ── GEMINI BACKEND ────────────────────────────────────────────────────────────────────────
+    "gemini25-flash": {
+        "backend": "gemini",
+        "model_id": "gemini-2.5-flash",
+        "label": "Gemini 2.5 Flash",
+        "desc": "✨ Google free • rápido e multimodal",
+    },
+    "gemini20-flash": {
+        "backend": "gemini",
+        "model_id": "gemini-2.0-flash",
+        "label": "Gemini 2.0 Flash",
+        "desc": "✨ Google free • estável",
+    },
+    "gemini25-flash-lite": {
+        "backend": "gemini",
+        "model_id": "gemini-2.5-flash-lite",
+        "label": "Gemini 2.5 Flash Lite",
+        "desc": "⚡ Google free • leve, cota maior",
+    },
+    "gemini20-flash-lite": {
+        "backend": "gemini",
+        "model_id": "gemini-2.0-flash-lite",
+        "label": "Gemini 2.0 Flash Lite",
+        "desc": "⚡ Google free • leve",
+    },
+
     # ── TRANSFORMERS BACKEND ─────────────────────────────────────────────────
     "gemma-1b": {
         "backend": "transformers",
