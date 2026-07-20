@@ -666,6 +666,7 @@ def chat_completions(req: ChatRequest):
             gemini_payload["generationConfig"] = {
                 "maxOutputTokens": max_tokens,
                 "temperature": temperature if temperature else 0.0,
+                "thinkingConfig": {"thinkingBudget": 0}
             }
 
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={google_studio_key}"
@@ -696,6 +697,8 @@ def chat_completions(req: ChatRequest):
                 raise APIError(f"Erro Gemini API: {err_msg}")
             if "candidates" not in data or not data["candidates"]:
                 raise APIError(f"Resposta inválida da Gemini API: {data}")
+
+            logger.info(f"[GEMINI DEBUG] finishReason={data['candidates'][0].get('finishReason')}, content={data['candidates'][0].get('content', {})}")
 
             text = data["candidates"][0]["content"]["parts"][0]["text"]
             usage = data.get("usageMetadata", {})
