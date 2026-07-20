@@ -700,14 +700,32 @@ function switchMode(mode) {
        opt.textContent = `${m.label}${quotaBadge} — ${m.desc}`;
        if (m.active) { opt.selected = true; currentModelKey = m.key; }
        sel.appendChild(opt);
-     });
-     updateModelLabel();
-   } catch (err) {
-    console.error('Erro ao carregar modelos:', err);
-  }
-}
+});
+      updateModelLabel();
+    } catch (err) {
+     console.error('Erro ao carregar modelos:', err);
+   }
+ }
 
-function onModelChange() {
+ // ── Update Quota Badge ────────────────────────────────────────────────────────
+ async function updateQuotaBadge(modelKey) {
+   try {
+     const res = await fetch('/v1/quota');
+     const data = await res.json();
+     const quota = data.quotas.find(q => q.model === modelKey);
+     if (!quota) return;
+     const opt = document.querySelector(`option[value="${modelKey}"]`);
+     if (!opt) return;
+     const label = opt.textContent.split(' — ')[0].trim();
+     const rest = opt.textContent.split(' — ')[1] || '';
+     const quotaBadge = ` (${quota.used}/${quota.limit})`;
+     opt.textContent = `${label}${quotaBadge} — ${rest}`;
+   } catch (err) {
+     console.error('Erro ao atualizar quota:', err);
+   }
+ }
+
+ function onModelChange() {
   currentModelKey = document.getElementById('model-select').value;
   modelJustChanged = true;
   document.getElementById('model-loading-hint').classList.add('show');
@@ -1019,6 +1037,8 @@ async function sendMessage() {
     appendMessage('assistant', reply, tokMeta);
     updateStats(usage.prompt_tokens||0, usage.completion_tokens||0, ms);
     speak(reply);
+
+    updateQuotaBadge(currentModelKey);
 
     if (modelJustChanged) {
       document.getElementById('model-loading-hint').classList.remove('show');
