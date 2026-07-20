@@ -294,3 +294,17 @@ TEXT_MODELS = {
 
 DEFAULT_MODEL_KEY = "gemma-1b"
 IMAGE_MODEL_ID = "stabilityai/sd-turbo"
+
+# ── Transcription Models ─────────────────────────────────────────────────────────────
+TRANSCRIPTION_MODELS = {
+    "whisper-turbo": {
+        "model_id": "whisper-large-v3-turbo",
+        "label": "Whisper Large v3 Turbo (Groq)",
+        "desc": "🎙️ Groq free • rápido",
+    },
+    "whisper-v3": {
+        "model_id": "whisper-large-v3",
+        "label": "Whisper Large v3 (Groq)",
+        "desc": "🎙️ Groq free • mais preciso",
+    },
+}

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Form, File, UploadFile
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, field_validator, constr
 from typing import List, Optional, Literal
@@ -21,7 +21,7 @@ import asyncio
 import json
 
 # ── Import Configuration and Logger ───────────────────────────────────────────
-from config import TEXT_MODELS, DEFAULT_MODEL_KEY, IMAGE_MODEL_ID
+from config import TEXT_MODELS, DEFAULT_MODEL_KEY, IMAGE_MODEL_ID, TRANSCRIPTION_MODELS
 from logger import logger
 
 # ── Retry Configuration ───────────────────────────────────────────────────────
@@ -856,3 +856,65 @@ async def generate_audio(req: AudioRequest):
         err = traceback.format_exc()
         logger.error(f"Erro na geração de áudio: {err}")
         raise APIError(str(e) + "\n" + err)
+
+# ── Endpoints — Audio Transcription ──────────────────────────────────────────────
+@app.post("/v1/audio/transcriptions")
+async def transcribe_audio(file: UploadFile = File(...), model: Optional[str] = Form("whisper-turbo")):
+    try:
+        if model not in TRANSCRIPTION_MODELS:
+            raise HTTPException(status_code=400, detail=f"Modelo desconhecido: {model}")
+
+        model_id = TRANSCRIPTION_MODELS[model]["model_id"]
+        groq_api_key = os.environ.get("GROQ_API_KEY")
+        if not groq_api_key:
+            raise ConfigurationError("GROQ_API_KEY não configurada")
+
+        url = "https://api.groq.com/openai/v1/audio/transcriptions"
+        headers = {"Authorization": f"Bearer {groq_api_key}"}
+
+        @async_retry_with_backoff(max_retries=3, initial_delay=1, backoff_factor=2)
+        async def call_transcription_api():
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    url,
+                    headers=headers,
+                    files={
+                        "file": (file.filename, await file.read(), file.content_type or "audio/mpeg"),
+                        "model": (None, model_id),
+                        "language": (None, "pt"),
+                    },
+                    timeout=120.0,
+                )
+                return resp
+
+        resp = asyncio.run(call_transcription_api())
+        if resp.status_code != 200:
+            try:
+                err_data = resp.json()
+                err_msg = err_data.get("error", {}).get("message", resp.text)
+            except:
+                err_msg = resp.text
+            raise APIError(f"Erro Groq Transcription ({resp.status_code}): {err_msg}")
+
+        data = resp.json()
+        if "error" in data:
+            err_msg = data["error"].get("message", str(data))
+            raise APIError(f"Erro Groq Transcription: {err_msg}")
+
+        return {"text": data.get("text", ""), "model": model}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        err = traceback.format_exc()
+        logger.error(f"Erro na transcrição: {err}")
+        raise APIError(str(e) + "\n" + err)
+
+@app.get("/v1/transcription-models")
+def list_transcription_models():
+    return {
+        "transcription_models": [
+            {"key": k, "label": v["label"], "desc": v["desc"]}
+            for k, v in TRANSCRIPTION_MODELS.items()
+        ]
+    }
