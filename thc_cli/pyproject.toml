@@ -1,0 +1,19 @@
+[project]
+name = "thc-cli"
+version = "0.1.0"
+description = "CLI THC - cliente de terminal para o THC LLM Router"
+requires-python = ">=3.8"
+dependencies = ["httpx", "rich"]
+
+[project.scripts]
+thc = "thc_cli.main:main"
+
+[tool.setuptools]
+packages = ["thc_cli", "thc_cli.core", "thc_cli.commands"]
+
+[tool.setuptools.package-dir]
+thc_cli = "."
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"

@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Form, File, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field, field_validator, constr
 from typing import List, Optional, Literal
 from datetime import datetime
@@ -383,6 +383,18 @@ def reload_knowledge():
         "knowledge_chunks": len(knowledge_index["chunks"]),
         "skills_chunks": len(skills_index["chunks"]),
     }
+
+@app.get("/download/thc-cli.tar.gz")
+def download_cli():
+    path = "dist/thc-cli.tar.gz"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Pacote ainda não foi gerado. Rode scripts/build_release.sh")
+    return FileResponse(path, media_type="application/gzip", filename="thc-cli.tar.gz")
+
+@app.get("/install.sh")
+def install_script():
+    with open("scripts/install.sh", "r") as f:
+        return PlainTextResponse(f.read(), media_type="text/x-shellscript")
 
 # ── Aplica os modos Fast/Médio/Thinking (parte de geração, não de conteúdo) ──
 def apply_mode(mode, max_tokens, temperature):
