@@ -666,8 +666,10 @@ def chat_completions(req: ChatRequest):
             gemini_payload["generationConfig"] = {
                 "maxOutputTokens": max_tokens,
                 "temperature": temperature if temperature else 0.0,
-                "thinkingConfig": {"thinkingBudget": 0}
             }
+
+            if model_id.startswith("gemini"):
+                gemini_payload["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 0}
 
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={google_studio_key}"
 

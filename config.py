@@ -195,6 +195,36 @@ TEXT_MODELS = {
         "label": "Gemini Flash Lite (latest)",
         "desc": "⚡ Google free • leve, cota maior",
     },
+    "gemini35-flash": {
+        "backend": "gemini",
+        "model_id": "gemini-3.5-flash",
+        "label": "Gemini 3.5 Flash",
+        "desc": "✨ Google free • mais recente",
+    },
+    "gemini31-flash-lite": {
+        "backend": "gemini",
+        "model_id": "gemini-3.1-flash-lite",
+        "label": "Gemini 3.1 Flash Lite",
+        "desc": "⚡ Google free • leve, cota maior",
+    },
+    "gemini3-flash-preview": {
+        "backend": "gemini",
+        "model_id": "gemini-3-flash-preview",
+        "label": "Gemini 3 Flash Preview",
+        "desc": "🔬 Google free • preview",
+    },
+    "gemma4-26b-google": {
+        "backend": "gemini",
+        "model_id": "gemma-4-26b-a4b-it",
+        "label": "Gemma 4 26B (Google direto)",
+        "desc": "🔥 Google free • sem thinkingConfig",
+    },
+    "gemma4-31b-google": {
+        "backend": "gemini",
+        "model_id": "gemma-4-31b-it",
+        "label": "Gemma 4 31B (Google direto)",
+        "desc": "🔥 Google free • sem thinkingConfig",
+    },
 
     # ── TRANSFORMERS BACKEND ─────────────────────────────────────────────────
     "gemma-1b": {
