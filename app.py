@@ -360,6 +360,21 @@ def list_models():
         "image_model": {"id": IMAGE_MODEL_ID},
     }
 
+@app.get("/v1/quota")
+def list_quotas():
+    from config import TEXT_MODELS
+    quotas = []
+    for k, v in TEXT_MODELS.items():
+        if "rpd" in v:
+            quotas.append({
+                "model": k,
+                "used": 0,
+                "limit": v["rpd"],
+                "rpd": v["rpd"],
+                "rpm": v["rpm"],
+            })
+    return {"quotas": quotas}
+
 @app.post("/v1/knowledge/reload")
 def reload_knowledge():
     """Reprocessa os arquivos de /knowledge e /skills sem precisar reiniciar o Space."""

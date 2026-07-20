@@ -607,6 +607,7 @@ if (!hasSTT) {
 // ── Estado ────────────────────────────────────────────────────────────────────
 let conversations = JSON.parse(localStorage.getItem('thc-convs') || '[]');
 let activeId = null;
+let quotaData = {};
 let history = [];
 let totalPrompt = 0, totalCompletion = 0;
 let ttsEnabled = true;
@@ -664,28 +665,44 @@ function switchMode(mode) {
 }
 
 // ── Modelos e Modo de raciocínio (Fast/Médio/Thinking) ───────────────────────
-function setMode(mode) {
-  currentMode = mode;
-  document.querySelectorAll('.mode-pill[data-mode]').forEach(el => {
-    el.classList.toggle('active', el.dataset.mode === mode);
-  });
-}
+ function setMode(mode) {
+   currentMode = mode;
+   document.querySelectorAll('.mode-pill[data-mode]').forEach(el => {
+     el.classList.toggle('active', el.dataset.mode === mode);
+   });
+ }
 
-async function loadModelList() {
-  try {
-    const res = await fetch('/v1/models');
-    const data = await res.json();
-    const sel = document.getElementById('model-select');
-    sel.innerHTML = '';
-    data.text_models.filter(m => !m.paid).forEach(m => {
-      const opt = document.createElement('option');
-      opt.value = m.key;
-      opt.textContent = `${m.label} — ${m.desc}`;
-      if (m.active) { opt.selected = true; currentModelKey = m.key; }
-      sel.appendChild(opt);
-    });
-    updateModelLabel();
-  } catch (err) {
+ // ── Quota Data ─────────────────────────────────────────────────────────────
+ async function loadQuotaData() {
+   try {
+     const res = await fetch('/v1/quota');
+     const data = await res.json();
+     data.quotas.forEach(q => {
+       quotaData[q.model] = {used: q.used, limit: q.limit};
+     });
+   } catch (err) {
+     console.error('Erro ao carregar quota:', err);
+   }
+ }
+
+ async function loadModelList() {
+   try {
+     await loadQuotaData();
+     const res = await fetch('/v1/models');
+     const data = await res.json();
+     const sel = document.getElementById('model-select');
+     sel.innerHTML = '';
+     data.text_models.filter(m => !m.paid).forEach(m => {
+       const opt = document.createElement('option');
+       opt.value = m.key;
+       const quota = quotaData[m.key] || {};
+       const quotaBadge = quota.limit ? ` (${quota.used}/${quota.limit})` : '';
+       opt.textContent = `${m.label}${quotaBadge} — ${m.desc}`;
+       if (m.active) { opt.selected = true; currentModelKey = m.key; }
+       sel.appendChild(opt);
+     });
+     updateModelLabel();
+   } catch (err) {
     console.error('Erro ao carregar modelos:', err);
   }
 }
