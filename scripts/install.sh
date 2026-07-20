@@ -33,20 +33,33 @@ tar -xzf "$TEMP_DIR/thc-cli.tar.gz" -C "$TEMP_DIR"
 
 echo "🔧 Instalando..."
 
-if ! command -v pip &> /dev/null && ! command -v pip3 &> /dev/null; then
-    echo "❌ ERRO: pip não encontrado."
-    echo "   Instale com: sudo apt install python3-pip"
-    exit 1
-fi
+if command -v pipx &> /dev/null; then
+    echo "   Usando pipx (ambiente isolado)..."
+    if ! pipx install "$TEMP_DIR/thc_cli" --force; then
+        echo "❌ ERRO: Falha na instalação com pipx."
+        exit 1
+    fi
+else
+    if ! command -v pip &> /dev/null && ! command -v pip3 &> /dev/null; then
+        echo "❌ ERRO: pip não encontrado."
+        echo "   Instale com: sudo apt install python3-pip"
+        exit 1
+    fi
 
-PIP_CMD="pip"
-if ! command -v pip &> /dev/null; then
-    PIP_CMD="pip3"
-fi
+    PIP_CMD="pip"
+    if ! command -v pip &> /dev/null; then
+        PIP_CMD="pip3"
+    fi
 
-if ! "$PIP_CMD" install --user "$TEMP_DIR/thc_cli"; then
-    echo "❌ ERRO: Falha na instalação com pip."
-    exit 1
+    echo "   pipx não encontrado, tentando pip --user..."
+    if ! "$PIP_CMD" install --user "$TEMP_DIR/thc_cli" 2>/dev/null; then
+        echo "   Ambiente gerenciado detectado, tentando com --break-system-packages..."
+        if ! "$PIP_CMD" install --user --break-system-packages "$TEMP_DIR/thc_cli"; then
+            echo "❌ ERRO: Falha na instalação com pip."
+            echo "   Tente instalar pipx primeiro: sudo apt install pipx"
+            exit 1
+        fi
+    fi
 fi
 
 if ! command -v thc &> /dev/null; then
