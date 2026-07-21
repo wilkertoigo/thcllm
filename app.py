@@ -1045,3 +1045,55 @@ def list_transcription_models():
             for k, v in TRANSCRIPTION_MODELS.items()
         ]
     }
+
+# ── Endpoint — Anthropic-compatible /v1/messages ──────────────────────────────
+class AnthropicMessage(BaseModel):
+    role: str
+    content: str
+
+class AnthropicRequest(BaseModel):
+    model: Optional[str] = Field(default=DEFAULT_MODEL_KEY)
+    messages: List[AnthropicMessage]
+    max_tokens: Optional[int] = Field(default=8192)
+    temperature: Optional[float] = Field(default=0.7)
+    system: Optional[str] = None
+    stream: Optional[bool] = False
+
+@app.post("/v1/messages")
+def anthropic_messages(req: AnthropicRequest, request: Request):
+    """Rota compatível com SDK Anthropic — converte para o formato interno e reutiliza chat_completions."""
+    # Monta as mensagens no formato interno
+    msgs = []
+    if req.system:
+        msgs.append(Message(role="system", content=req.system))
+    for m in req.messages:
+        msgs.append(Message(role=m.role, content=m.content))
+
+    # Reutiliza exatamente a lógica já existente
+    chat_req = ChatRequest(
+        model=req.model,
+        messages=msgs,
+        max_tokens=req.max_tokens,
+        temperature=req.temperature,
+        mode="medium",
+        web=False,
+        free_mode=False,
+    )
+    result = chat_completions(chat_req)
+
+    # Converte resposta para formato Anthropic
+    reply = result["choices"][0]["message"]["content"]
+    usage = result.get("usage", {})
+    return {
+        "id": f"msg_thc_{uuid.uuid4().hex[:8]}",
+        "type": "message",
+        "role": "assistant",
+        "content": [{"type": "text", "text": reply}],
+        "model": req.model,
+        "stop_reason": "end_turn",
+        "stop_sequence": None,
+        "usage": {
+            "input_tokens": usage.get("prompt_tokens", 0),
+            "output_tokens": usage.get("completion_tokens", 0),
+        },
+    }
