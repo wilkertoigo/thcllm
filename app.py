@@ -435,6 +435,13 @@ def list_models():
     from config import TEXT_MODELS, IMAGE_MODEL_ID
     current_key = get_current_model_key()
     return {
+        # ── Formato padrão OpenAI — é isso que o Kilo Code/Aider leem pra autodescobrir ──
+        "object": "list",
+        "data": [
+            {"id": k, "object": "model", "created": 0, "owned_by": v["backend"]}
+            for k, v in TEXT_MODELS.items()
+        ],
+        # ── Nosso formato próprio — continua igual, usado pelo index.html ──
         "text_models": [
             {
                 "key": k,
