@@ -1083,28 +1083,348 @@ class AnthropicRequest(BaseModel):
     system: Optional[str] = None
     stream: Optional[bool] = False
 
+
+async def chat_completions_async(req: ChatRequest):
+    """Versão async do chat_completions — usada pelos endpoints SSE."""
+    try:
+        state = get_text_model(req.model)
+        backend = state["backend"]
+        chat = [{"role": m.role, "content": m.content} for m in req.messages]
+
+        last_user_msg = next((m["content"] for m in reversed(chat) if m["role"] == "user"), "")
+
+        system_content = build_system_prompt(last_user_msg, req.mode, req.web, req.free_mode)
+        chat = [{"role": "system", "content": system_content}] + chat
+
+        max_tokens, do_sample, temperature = apply_mode(req.mode, req.max_tokens, req.temperature)
+
+        t0 = time.time()
+
+        if backend == "transformers":
+            tokenizer = state["tokenizer"]
+            model = state["model"]
+
+            tokenized = tokenizer.apply_chat_template(
+                chat, return_tensors="pt", add_generation_prompt=True, return_dict=True,
+            )
+            input_ids = tokenized["input_ids"]
+
+            gen_kwargs = dict(
+                max_new_tokens=max_tokens,
+                do_sample=do_sample,
+                pad_token_id=tokenizer.eos_token_id,
+            )
+            if do_sample and temperature:
+                gen_kwargs["temperature"] = temperature
+
+            with torch.no_grad():
+                output = model.generate(input_ids, **gen_kwargs)
+
+            generated = output[0][input_ids.shape[-1]:]
+            text = tokenizer.decode(generated, skip_special_tokens=True)
+            prompt_tokens = input_ids.shape[-1]
+            completion_tokens = len(generated)
+
+        elif backend == "gguf":
+            llm = state["model"]
+            safe_chat = sanitize_chat_for_gguf(chat)
+            result = llm.create_chat_completion(
+                messages=safe_chat,
+                max_tokens=max_tokens,
+                temperature=temperature if temperature else 0.0,
+            )
+            text = result["choices"][0]["message"]["content"]
+            usage = result.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+
+        elif backend == "kilo":
+            model_id = state["model"]
+            kilo_api_key = os.environ.get("KILO_API_KEY")
+            if not kilo_api_key:
+                raise ConfigurationError("KILO_API_KEY não configurada")
+
+            headers = {
+                "Authorization": f"Bearer {kilo_api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": model_id,
+                "messages": chat,
+                "max_tokens": max_tokens,
+                "temperature": temperature if temperature else 0.0,
+            }
+
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    "https://api.kilo.ai/api/gateway/v1/chat/completions",
+                    json=payload,
+                    headers=headers,
+                    timeout=600.0,
+                )
+
+            if resp.status_code != 200:
+                try:
+                    err_data = resp.json()
+                    err_msg = err_data.get("error", {}).get("message", resp.text)
+                except Exception:
+                    err_msg = resp.text
+                raise APIError(f"Erro Kilo API ({resp.status_code}): {err_msg}")
+
+            data = resp.json()
+            if "error" in data:
+                err_msg = data["error"].get("message", str(data))
+                raise APIError(f"Erro Kilo API: {err_msg}")
+            if "choices" not in data or not data["choices"]:
+                raise APIError(f"Resposta inválida da Kilo API: {data}")
+
+            text = data["choices"][0]["message"]["content"]
+            usage = data.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+
+        elif backend == "openrouter":
+            model_id = state["model"]
+            openrouter_api_key = os.environ.get("OPENROUTER_API_KEY")
+            if not openrouter_api_key:
+                raise ConfigurationError("OPENROUTER_API_KEY não configurada")
+
+            headers = {
+                "Authorization": f"Bearer {openrouter_api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": model_id,
+                "messages": chat,
+                "max_tokens": max_tokens,
+                "temperature": temperature if temperature else 0.0,
+            }
+
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    json=payload,
+                    headers=headers,
+                    timeout=600.0,
+                )
+
+            if resp.status_code != 200:
+                try:
+                    err_data = resp.json()
+                    err_msg = err_data.get("error", {}).get("message", resp.text)
+                except Exception:
+                    err_msg = resp.text
+                raise APIError(f"Erro OpenRouter API ({resp.status_code}): {err_msg}")
+
+            data = resp.json()
+            if "error" in data:
+                err_msg = data["error"].get("message", str(data))
+                raise APIError(f"Erro OpenRouter API: {err_msg}")
+            if "choices" not in data or not data["choices"]:
+                raise APIError(f"Resposta inválida da OpenRouter API: {data}")
+
+            text = data["choices"][0]["message"]["content"]
+            usage = data.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+
+        elif backend == "groq":
+            model_id = state["model"]
+            groq_api_key = os.environ.get("GROQ_API_KEY")
+            if not groq_api_key:
+                raise ConfigurationError("GROQ_API_KEY não configurada")
+
+            headers = {
+                "Authorization": f"Bearer {groq_api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": model_id,
+                "messages": chat,
+                "max_tokens": max_tokens,
+                "temperature": temperature if temperature else 0.0,
+            }
+
+            payload_bytes = len(json.dumps(payload))
+            logger.info(f"[GROQ DEBUG] Payload size: {payload_bytes} bytes, Messages: {len(chat)}")
+
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    json=payload,
+                    headers=headers,
+                    timeout=600.0,
+                )
+
+            if resp.status_code != 200:
+                try:
+                    err_data = resp.json()
+                    err_msg = err_data.get("error", {}).get("message", resp.text)
+                except Exception:
+                    err_msg = resp.text
+                raise APIError(f"Erro Groq API ({resp.status_code}): {err_msg}")
+
+            data = resp.json()
+            if "error" in data:
+                err_msg = data["error"].get("message", str(data))
+                raise APIError(f"Erro Groq API: {err_msg}")
+            if "choices" not in data or not data["choices"]:
+                raise APIError(f"Resposta inválida da Groq API: {data}")
+
+            text = data["choices"][0]["message"]["content"]
+            usage = data.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+
+        elif backend == "mistral":
+            model_id = state["model"]
+            mistral_api_key = os.environ.get("MISTRAL_API_KEY")
+            if not mistral_api_key:
+                raise ConfigurationError("MISTRAL_API_KEY não configurada")
+
+            headers = {
+                "Authorization": f"Bearer {mistral_api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": model_id,
+                "messages": chat,
+                "max_tokens": max_tokens,
+                "temperature": temperature if temperature else 0.0,
+            }
+
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    "https://api.mistral.ai/v1/chat/completions",
+                    json=payload,
+                    headers=headers,
+                    timeout=600.0,
+                )
+
+            if resp.status_code != 200:
+                try:
+                    err_data = resp.json()
+                    err_msg = err_data.get("error", {}).get("message", resp.text)
+                except Exception:
+                    err_msg = resp.text
+                raise APIError(f"Erro Mistral API ({resp.status_code}): {err_msg}")
+
+            data = resp.json()
+            if "error" in data:
+                err_msg = data["error"].get("message", str(data))
+                raise APIError(f"Erro Mistral API: {err_msg}")
+            if "choices" not in data or not data["choices"]:
+                raise APIError(f"Resposta inválida da Mistral API: {data}")
+
+            text = data["choices"][0]["message"]["content"]
+            usage = data.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+            finish_reason = data["choices"][0].get("finish_reason", "unknown")
+            logger.info(f"[MISTRAL DEBUG] finish_reason={finish_reason}, completion_tokens={completion_tokens}, max_tokens_sent={max_tokens}")
+
+        elif backend == "gemini":
+            model_id = state["model"]
+            google_studio_key = os.environ.get("GOOGLE_STUDIO_API_KEY")
+            if not google_studio_key:
+                raise ConfigurationError("GOOGLE_STUDIO_API_KEY não configurada")
+
+            gemini_payload = convert_to_gemini_format(chat, system_content)
+            gemini_payload["generationConfig"] = {
+                "maxOutputTokens": max_tokens,
+                "temperature": temperature if temperature else 0.0,
+            }
+
+            if model_id.startswith("gemini"):
+                gemini_payload["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 0}
+
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={google_studio_key}"
+
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    url,
+                    json=gemini_payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=600.0,
+                )
+
+            if resp.status_code != 200:
+                try:
+                    err_data = resp.json()
+                    err_msg = err_data.get("error", {}).get("message", resp.text)
+                except Exception:
+                    err_msg = resp.text
+                raise APIError(f"Erro Gemini API ({resp.status_code}): {err_msg}")
+
+            data = resp.json()
+            if "error" in data:
+                err_msg = data["error"].get("message", str(data))
+                raise APIError(f"Erro Gemini API: {err_msg}")
+            if "candidates" not in data or not data["candidates"]:
+                raise APIError(f"Resposta inválida da Gemini API: {data}")
+
+            logger.info(f"[GEMINI DEBUG] finishReason={data['candidates'][0].get('finishReason')}, content={data['candidates'][0].get('content', {})}")
+
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            usage = data.get("usageMetadata", {})
+            prompt_tokens = usage.get("promptTokenCount", 0)
+            completion_tokens = usage.get("candidatesTokenCount", 0)
+
+            finish_reason = "stop"
+            if data["candidates"][0].get("finishReason") == "MAX_TOKENS":
+                finish_reason = "length"
+
+        else:
+            raise BackendError("Backend inválido")
+
+        elapsed = time.time() - t0
+        logger.info(f"Resposta gerada em {elapsed:.1f}s ({backend}, web={req.web})")
+
+        return {
+            "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": req.model,
+            "mode": req.mode,
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": text},
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": prompt_tokens + completion_tokens,
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        err = traceback.format_exc()
+        logger.error(f"Erro no chat: {err}")
+        raise ChatError(str(e) + "\n" + err)
+
+
 @app.post("/v1/messages")
 async def anthropic_messages(req: AnthropicRequest, request: Request):
     """Rota compatível com SDK Anthropic — suporta stream=true (SSE) e stream=false (JSON)."""
 
-    # Monta as mensagens no formato interno
-    def build_chat_req():
-        msgs = []
-        if req.system:
-            msgs.append(Message(role="system", content=req.system))
-        for m in req.messages:
-            msgs.append(Message(role=m.role, content=m.content))
-        return ChatRequest(
-            model=req.model,
-            messages=msgs,
-            max_tokens=req.max_tokens,
-            temperature=req.temperature,
-            mode="medium",
-            web=False,
-            free_mode=False,
-        )
+    msgs = []
+    if req.system:
+        msgs.append(Message(role="system", content=req.system))
+    for m in req.messages:
+        msgs.append(Message(role=m.role, content=m.content))
 
-    # ── Modo streaming (Claude Code usa isso por padrão) ──────────────────
+    chat_req = ChatRequest(
+        model=req.model,
+        messages=msgs,
+        max_tokens=req.max_tokens,
+        temperature=req.temperature,
+        mode="medium",
+        web=False,
+        free_mode=False,
+    )
+
     if req.stream:
         async def event_stream():
             msg_id = f"msg_thc_{uuid.uuid4().hex[:8]}"
@@ -1114,7 +1434,7 @@ async def anthropic_messages(req: AnthropicRequest, request: Request):
             yield f"event: ping\ndata: {json.dumps({'type':'ping'})}\n\n"
 
             try:
-                result = chat_completions(build_chat_req())
+                result = await chat_completions_async(chat_req)
                 reply = result["choices"][0]["message"]["content"]
                 usage = result.get("usage", {})
             except Exception as e:
@@ -1133,8 +1453,7 @@ async def anthropic_messages(req: AnthropicRequest, request: Request):
 
         return StreamingResponse(event_stream(), media_type="text/event-stream")
 
-    # ── Modo JSON normal ───────────────────────────────────────────────────
-    result = chat_completions(build_chat_req())
+    result = await chat_completions_async(chat_req)
     reply = result["choices"][0]["message"]["content"]
     usage = result.get("usage", {})
     return {
@@ -1152,64 +1471,50 @@ async def anthropic_messages(req: AnthropicRequest, request: Request):
     }
 
 # ── Streaming SSE para /v1/messages (Claude Code compat) ─────────────────────
-from fastapi.responses import StreamingResponse
-import asyncio
 
 @app.post("/v1/messages/stream")
 async def anthropic_messages_stream(req: AnthropicRequest, request: Request):
     """Endpoint de streaming SSE compatível com Claude Code SDK."""
 
+    msgs = []
+    if req.system:
+        msgs.append(Message(role="system", content=req.system))
+    for m in req.messages:
+        msgs.append(Message(role=m.role, content=m.content))
+
+    chat_req = ChatRequest(
+        model=req.model,
+        messages=msgs,
+        max_tokens=req.max_tokens,
+        temperature=req.temperature,
+        mode="medium",
+        web=False,
+        free_mode=False,
+    )
+
+    try:
+        result = await chat_completions_async(chat_req)
+        reply = result["choices"][0]["message"]["content"]
+        usage = result.get("usage", {})
+    except Exception as e:
+        reply = f"Erro: {str(e)}"
+        usage = {}
+
     async def event_stream():
         msg_id = f"msg_thc_{uuid.uuid4().hex[:8]}"
 
-        # message_start
         yield f"event: message_start\ndata: {json.dumps({'type':'message_start','message':{'id':msg_id,'type':'message','role':'assistant','content':[],'model':req.model,'stop_reason':None,'stop_sequence':None,'usage':{'input_tokens':0,'output_tokens':0}}})}\n\n"
-
-        # content_block_start
         yield f"event: content_block_start\ndata: {json.dumps({'type':'content_block_start','index':0,'content_block':{'type':'text','text':''}})}\n\n"
-
-        # ping
         yield f"event: ping\ndata: {json.dumps({'type':'ping'})}\n\n"
 
-        # Chama o endpoint síncrono existente
-        msgs = []
-        if req.system:
-            msgs.append(Message(role="system", content=req.system))
-        for m in req.messages:
-            msgs.append(Message(role=m.role, content=m.content))
-
-        chat_req = ChatRequest(
-            model=req.model,
-            messages=msgs,
-            max_tokens=req.max_tokens,
-            temperature=req.temperature,
-            mode="medium",
-            web=False,
-            free_mode=False,
-        )
-
-        try:
-            result = chat_completions(chat_req)
-            reply = result["choices"][0]["message"]["content"]
-            usage = result.get("usage", {})
-        except Exception as e:
-            reply = f"Erro: {str(e)}"
-            usage = {}
-
-        # Emite o texto em chunks de ~20 chars para simular streaming
         chunk_size = 20
         for i in range(0, len(reply), chunk_size):
             chunk = reply[i:i+chunk_size]
             yield f"event: content_block_delta\ndata: {json.dumps({'type':'content_block_delta','index':0,'delta':{'type':'text_delta','text':chunk}})}\n\n"
             await asyncio.sleep(0.01)
 
-        # content_block_stop
         yield f"event: content_block_stop\ndata: {json.dumps({'type':'content_block_stop','index':0})}\n\n"
-
-        # message_delta (stop_reason)
         yield f"event: message_delta\ndata: {json.dumps({'type':'message_delta','delta':{'stop_reason':'end_turn','stop_sequence':None},'usage':{'output_tokens':usage.get('completion_tokens',0)}})}\n\n"
-
-        # message_stop
         yield f"event: message_stop\ndata: {json.dumps({'type':'message_stop'})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
