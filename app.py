@@ -1084,28 +1084,57 @@ class AnthropicRequest(BaseModel):
     stream: Optional[bool] = False
 
 @app.post("/v1/messages")
-def anthropic_messages(req: AnthropicRequest, request: Request):
-    """Rota compatível com SDK Anthropic — converte para o formato interno e reutiliza chat_completions."""
+async def anthropic_messages(req: AnthropicRequest, request: Request):
+    """Rota compatível com SDK Anthropic — suporta stream=true (SSE) e stream=false (JSON)."""
+
     # Monta as mensagens no formato interno
-    msgs = []
-    if req.system:
-        msgs.append(Message(role="system", content=req.system))
-    for m in req.messages:
-        msgs.append(Message(role=m.role, content=m.content))
+    def build_chat_req():
+        msgs = []
+        if req.system:
+            msgs.append(Message(role="system", content=req.system))
+        for m in req.messages:
+            msgs.append(Message(role=m.role, content=m.content))
+        return ChatRequest(
+            model=req.model,
+            messages=msgs,
+            max_tokens=req.max_tokens,
+            temperature=req.temperature,
+            mode="medium",
+            web=False,
+            free_mode=False,
+        )
 
-    # Reutiliza exatamente a lógica já existente
-    chat_req = ChatRequest(
-        model=req.model,
-        messages=msgs,
-        max_tokens=req.max_tokens,
-        temperature=req.temperature,
-        mode="medium",
-        web=False,
-        free_mode=False,
-    )
-    result = chat_completions(chat_req)
+    # ── Modo streaming (Claude Code usa isso por padrão) ──────────────────
+    if req.stream:
+        async def event_stream():
+            msg_id = f"msg_thc_{uuid.uuid4().hex[:8]}"
 
-    # Converte resposta para formato Anthropic
+            yield f"event: message_start\ndata: {json.dumps({'type':'message_start','message':{'id':msg_id,'type':'message','role':'assistant','content':[],'model':req.model,'stop_reason':None,'stop_sequence':None,'usage':{'input_tokens':0,'output_tokens':0}}})}\n\n"
+            yield f"event: content_block_start\ndata: {json.dumps({'type':'content_block_start','index':0,'content_block':{'type':'text','text':''}})}\n\n"
+            yield f"event: ping\ndata: {json.dumps({'type':'ping'})}\n\n"
+
+            try:
+                result = chat_completions(build_chat_req())
+                reply = result["choices"][0]["message"]["content"]
+                usage = result.get("usage", {})
+            except Exception as e:
+                reply = f"Erro: {str(e)}"
+                usage = {}
+
+            chunk_size = 20
+            for i in range(0, len(reply), chunk_size):
+                chunk = reply[i:i+chunk_size]
+                yield f"event: content_block_delta\ndata: {json.dumps({'type':'content_block_delta','index':0,'delta':{'type':'text_delta','text':chunk}})}\n\n"
+                await asyncio.sleep(0.01)
+
+            yield f"event: content_block_stop\ndata: {json.dumps({'type':'content_block_stop','index':0})}\n\n"
+            yield f"event: message_delta\ndata: {json.dumps({'type':'message_delta','delta':{'stop_reason':'end_turn','stop_sequence':None},'usage':{'output_tokens':usage.get('completion_tokens',0)}})}\n\n"
+            yield f"event: message_stop\ndata: {json.dumps({'type':'message_stop'})}\n\n"
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+    # ── Modo JSON normal ───────────────────────────────────────────────────
+    result = chat_completions(build_chat_req())
     reply = result["choices"][0]["message"]["content"]
     usage = result.get("usage", {})
     return {
@@ -1121,3 +1150,66 @@ def anthropic_messages(req: AnthropicRequest, request: Request):
             "output_tokens": usage.get("completion_tokens", 0),
         },
     }
+
+# ── Streaming SSE para /v1/messages (Claude Code compat) ─────────────────────
+from fastapi.responses import StreamingResponse
+import asyncio
+
+@app.post("/v1/messages/stream")
+async def anthropic_messages_stream(req: AnthropicRequest, request: Request):
+    """Endpoint de streaming SSE compatível com Claude Code SDK."""
+
+    async def event_stream():
+        msg_id = f"msg_thc_{uuid.uuid4().hex[:8]}"
+
+        # message_start
+        yield f"event: message_start\ndata: {json.dumps({'type':'message_start','message':{'id':msg_id,'type':'message','role':'assistant','content':[],'model':req.model,'stop_reason':None,'stop_sequence':None,'usage':{'input_tokens':0,'output_tokens':0}}})}\n\n"
+
+        # content_block_start
+        yield f"event: content_block_start\ndata: {json.dumps({'type':'content_block_start','index':0,'content_block':{'type':'text','text':''}})}\n\n"
+
+        # ping
+        yield f"event: ping\ndata: {json.dumps({'type':'ping'})}\n\n"
+
+        # Chama o endpoint síncrono existente
+        msgs = []
+        if req.system:
+            msgs.append(Message(role="system", content=req.system))
+        for m in req.messages:
+            msgs.append(Message(role=m.role, content=m.content))
+
+        chat_req = ChatRequest(
+            model=req.model,
+            messages=msgs,
+            max_tokens=req.max_tokens,
+            temperature=req.temperature,
+            mode="medium",
+            web=False,
+            free_mode=False,
+        )
+
+        try:
+            result = chat_completions(chat_req)
+            reply = result["choices"][0]["message"]["content"]
+            usage = result.get("usage", {})
+        except Exception as e:
+            reply = f"Erro: {str(e)}"
+            usage = {}
+
+        # Emite o texto em chunks de ~20 chars para simular streaming
+        chunk_size = 20
+        for i in range(0, len(reply), chunk_size):
+            chunk = reply[i:i+chunk_size]
+            yield f"event: content_block_delta\ndata: {json.dumps({'type':'content_block_delta','index':0,'delta':{'type':'text_delta','text':chunk}})}\n\n"
+            await asyncio.sleep(0.01)
+
+        # content_block_stop
+        yield f"event: content_block_stop\ndata: {json.dumps({'type':'content_block_stop','index':0})}\n\n"
+
+        # message_delta (stop_reason)
+        yield f"event: message_delta\ndata: {json.dumps({'type':'message_delta','delta':{'stop_reason':'end_turn','stop_sequence':None},'usage':{'output_tokens':usage.get('completion_tokens',0)}})}\n\n"
+
+        # message_stop
+        yield f"event: message_stop\ndata: {json.dumps({'type':'message_stop'})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
