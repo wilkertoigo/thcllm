@@ -294,7 +294,7 @@ class ChatRequest(BaseModel):
     web: Optional[bool] = Field(default=False, description="Usar busca web")
     free_mode: Optional[bool] = Field(default=False, description="Modo livre - pula RAG e persona")
     messages: List[Message] = Field(min_length=1, description="Lista de mensagens")
-    max_tokens: Optional[int] = Field(default=8192, ge=1, le=16384, description="Máximo de tokens")
+    max_tokens: Optional[int] = Field(default=8192, ge=1, le=1000000, description="Máximo de tokens")
     temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0, description="Temperatura de geração")
 
     @field_validator("model")
@@ -599,7 +599,7 @@ def chat_completions(req: ChatRequest):
                         "https://api.kilo.ai/api/gateway/v1/chat/completions",
                         json=payload,
                         headers=headers,
-                        timeout=60.0,
+                        timeout=600.0,
                     )
                     return resp
 
@@ -648,7 +648,7 @@ def chat_completions(req: ChatRequest):
                         "https://openrouter.ai/api/v1/chat/completions",
                         json=payload,
                         headers=headers,
-                        timeout=60.0,
+                        timeout=600.0,
                     )
                     return resp
 
@@ -700,7 +700,7 @@ def chat_completions(req: ChatRequest):
                         "https://api.groq.com/openai/v1/chat/completions",
                         json=payload,
                         headers=headers,
-                        timeout=60.0,
+                        timeout=600.0,
                     )
                     return resp
 
@@ -749,7 +749,7 @@ def chat_completions(req: ChatRequest):
                         "https://api.mistral.ai/v1/chat/completions",
                         json=payload,
                         headers=headers,
-                        timeout=60.0,
+                        timeout=600.0,
                     )
                     return resp
 
@@ -800,7 +800,7 @@ def chat_completions(req: ChatRequest):
                         url,
                         json=gemini_payload,
                         headers={"Content-Type": "application/json"},
-                        timeout=60.0,
+                        timeout=600.0,
                     )
                     return resp
 
