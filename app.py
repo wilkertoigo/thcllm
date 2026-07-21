@@ -500,7 +500,7 @@ def install_script():
 def apply_mode(mode, max_tokens, temperature):
     do_sample = temperature > 0
     if mode == "fast":
-        return min(max_tokens, 32048), False, None
+        return max_tokens, False, None
     elif mode == "thinking":
         t = min(temperature, 0.4) if temperature > 0 else 0.3
         return max(max_tokens, 768), True, t
@@ -527,6 +527,29 @@ def convert_to_gemini_format(chat_messages, system_content=None):
         }
 
     return payload
+
+
+# ── Helper: Sanitiza mensagens para GGUF (llama-cpp exige user/assistant alternados) ──
+def sanitize_chat_for_gguf(chat_messages):
+    messages = [{"role": m["role"], "content": m["content"]} for m in chat_messages]
+    system_content = ""
+    while messages and messages[0]["role"] == "system":
+        system_content += (system_content + "\n\n" if system_content else "") + messages.pop(0)["content"]
+    if system_content and messages and messages[0]["role"] == "user":
+        messages[0]["content"] = system_content + "\n\n" + messages[0]["content"]
+    elif system_content:
+        messages.insert(0, {"role": "user", "content": system_content})
+    if not messages or messages[0]["role"] != "user":
+        messages.insert(0, {"role": "user", "content": "Continue."})
+    sanitized = [messages[0]]
+    for msg in messages[1:]:
+        if sanitized[-1]["role"] == msg["role"]:
+            sanitized[-1]["content"] += "\n\n" + msg["content"]
+        else:
+            sanitized.append(msg)
+    if len(sanitized) % 2 == 0:
+        sanitized.append({"role": "user", "content": "Continue."})
+    return sanitized
 
 # ── Endpoints — Chat ────────────────────────────────────────────────────────────
 @app.post("/v1/chat/completions")
@@ -572,8 +595,9 @@ def chat_completions(req: ChatRequest):
 
         elif backend == "gguf":
             llm = state["model"]
+            safe_chat = sanitize_chat_for_gguf(chat)
             result = llm.create_chat_completion(
-                messages=chat,
+                messages=safe_chat,
                 max_tokens=max_tokens,
                 temperature=temperature if temperature else 0.0,
             )
