@@ -298,7 +298,7 @@ TEXT_MODELS = {
     },
 }
 
-DEFAULT_MODEL_KEY = "gemma-1b"
+DEFAULT_MODEL_KEY = "ministral3b-mst"
 IMAGE_MODEL_ID = "stabilityai/sd-turbo"
 
 # ── Transcription Models ─────────────────────────────────────────────────────────────
