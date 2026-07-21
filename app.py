@@ -500,7 +500,7 @@ def install_script():
 def apply_mode(mode, max_tokens, temperature):
     do_sample = temperature > 0
     if mode == "fast":
-        return min(max_tokens, 2048), False, None
+        return min(max_tokens, 32048), False, None
     elif mode == "thinking":
         t = min(temperature, 0.4) if temperature > 0 else 0.3
         return max(max_tokens, 768), True, t
