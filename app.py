@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Form, File, UploadFile, Request, Depends
-from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel, Field, field_validator, constr
 from typing import List, Optional, Literal
@@ -435,13 +435,11 @@ def list_models():
     from config import TEXT_MODELS, IMAGE_MODEL_ID
     current_key = get_current_model_key()
     return {
-        # ── Formato padrão OpenAI — é isso que o Kilo Code/Aider leem pra autodescobrir ──
         "object": "list",
         "data": [
             {"id": k, "object": "model", "created": 0, "owned_by": v["backend"]}
             for k, v in TEXT_MODELS.items()
         ],
-        # ── Nosso formato próprio — continua igual, usado pelo index.html ──
         "text_models": [
             {
                 "key": k,
@@ -474,7 +472,6 @@ def list_quotas():
 
 @app.post("/v1/knowledge/reload")
 def reload_knowledge():
-    """Reprocessa os arquivos de /knowledge e /skills sem precisar reiniciar o Space."""
     reload_indexes()
     return {
         "knowledge_chunks": len(knowledge_index["chunks"]),
@@ -509,7 +506,6 @@ def apply_mode(mode, max_tokens, temperature):
 
 # ── Helper: Converte formato OpenAI → Gemini ─────────────────────────────────────
 def convert_to_gemini_format(chat_messages, system_content=None):
-    """Converte mensagens do formato OpenAI para o formato Gemini"""
     contents = []
     for msg in chat_messages:
         role = "model" if msg["role"] == "assistant" else "user"
@@ -529,7 +525,7 @@ def convert_to_gemini_format(chat_messages, system_content=None):
     return payload
 
 
-# ── Helper: Sanitiza mensagens para GGUF (llama-cpp exige user/assistant alternados) ──
+# ── Helper: Sanitiza mensagens para GGUF ──────────────────────────────────────
 def sanitize_chat_for_gguf(chat_messages):
     messages = [{"role": m["role"], "content": m["content"]} for m in chat_messages]
     system_content = ""
@@ -639,7 +635,7 @@ def chat_completions(req: ChatRequest):
                 try:
                     err_data = resp.json()
                     err_msg = err_data.get("error", {}).get("message", resp.text)
-                except:
+                except Exception:
                     err_msg = resp.text
                 raise APIError(f"Erro Kilo API ({resp.status_code}): {err_msg}")
 
@@ -688,7 +684,7 @@ def chat_completions(req: ChatRequest):
                 try:
                     err_data = resp.json()
                     err_msg = err_data.get("error", {}).get("message", resp.text)
-                except:
+                except Exception:
                     err_msg = resp.text
                 raise APIError(f"Erro OpenRouter API ({resp.status_code}): {err_msg}")
 
@@ -740,7 +736,7 @@ def chat_completions(req: ChatRequest):
                 try:
                     err_data = resp.json()
                     err_msg = err_data.get("error", {}).get("message", resp.text)
-                except:
+                except Exception:
                     err_msg = resp.text
                 raise APIError(f"Erro Groq API ({resp.status_code}): {err_msg}")
 
@@ -789,7 +785,7 @@ def chat_completions(req: ChatRequest):
                 try:
                     err_data = resp.json()
                     err_msg = err_data.get("error", {}).get("message", resp.text)
-                except:
+                except Exception:
                     err_msg = resp.text
                 raise APIError(f"Erro Mistral API ({resp.status_code}): {err_msg}")
 
@@ -840,7 +836,7 @@ def chat_completions(req: ChatRequest):
                 try:
                     err_data = resp.json()
                     err_msg = err_data.get("error", {}).get("message", resp.text)
-                except:
+                except Exception:
                     err_msg = resp.text
                 raise APIError(f"Erro Gemini API ({resp.status_code}): {err_msg}")
 
@@ -1001,12 +997,10 @@ async def generate_audio(req: AudioRequest, email: str = Depends(get_current_use
             "transcript": "".join(transcript_chunks) or None,
             "data": [{"b64_json": full_audio_b64}],
         }
-    except HTTPException:
-        raise
     except Exception as e:
         err = traceback.format_exc()
         logger.error(f"Erro na geração de áudio: {err}")
-        raise APIError(str(e) + "\n" + err)
+        raise ImageGenerationError(str(e) + "\n" + err)
 
 # ── Endpoints — Audio Transcription ──────────────────────────────────────────────
 @app.post("/v1/audio/transcriptions")
@@ -1043,7 +1037,7 @@ async def transcribe_audio(file: UploadFile = File(...), model: Optional[str] = 
             try:
                 err_data = resp.json()
                 err_msg = err_data.get("error", {}).get("message", resp.text)
-            except:
+            except Exception:
                 err_msg = resp.text
             raise APIError(f"Erro Groq Transcription ({resp.status_code}): {err_msg}")
 
@@ -1053,9 +1047,6 @@ async def transcribe_audio(file: UploadFile = File(...), model: Optional[str] = 
             raise APIError(f"Erro Groq Transcription: {err_msg}")
 
         return {"text": data.get("text", ""), "model": model}
-
-    except HTTPException:
-        raise
     except Exception as e:
         err = traceback.format_exc()
         logger.error(f"Erro na transcrição: {err}")
@@ -1469,8 +1460,6 @@ async def anthropic_messages(req: AnthropicRequest, request: Request):
             "output_tokens": usage.get("completion_tokens", 0),
         },
     }
-
-# ── Streaming SSE para /v1/messages (Claude Code compat) ─────────────────────
 
 @app.post("/v1/messages/stream")
 async def anthropic_messages_stream(req: AnthropicRequest, request: Request):
