@@ -4,3 +4,4 @@ __pycache__/
 *.bak
 patch_*.py
 dist/
+FETCH_HEAD
