@@ -113,6 +113,7 @@ def run_agent(
     on_tool_call: Optional[callable] = None,
     on_tool_result: Optional[callable] = None,
     on_thinking: Optional[callable] = None,
+    on_round_complete: Optional[callable] = None,
 ) -> str:
     tools_description = _build_tools_prompt()
     system_prompt = (
@@ -181,4 +182,8 @@ def run_agent(
             })
         tool_feedback = json.dumps(tool_results, ensure_ascii=False, indent=2)
         messages.append({"role": "user", "content": "[Resultado das tools]\n" + tool_feedback})
+        if on_round_complete:
+            should_continue = on_round_complete()
+            if should_continue is False:
+                return "Execução interrompida pelo usuário durante o Plan Mode (passo a passo)."
     return "Limite de interações do agente atingido."

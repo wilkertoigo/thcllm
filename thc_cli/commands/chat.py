@@ -11,6 +11,7 @@ from rich.text import Text
 
 from ..core import print_thinking_spinner, print_diff, confirm
 from ..core.agent import run_agent
+from ..core.plan import generate_plan
 from ..core.providers import get_provider
 from ..core.session import list_sessions, load_session, save_session
 from ..core.system_prompt import build_base_system_prompt
@@ -57,7 +58,7 @@ def _build_web_search_system_message(query: str) -> dict | None:
     }
 
 
-def _banner(model: str, mode: str, web: bool, agent: bool, provider_name: str):
+def _banner(model: str, mode: str, web: bool, agent: bool, plan: bool, provider_name: str):
     title = Text()
     title.append("🤖 ", style="bold green")
     title.append("THC CLI", style="bold cyan")
@@ -66,8 +67,9 @@ def _banner(model: str, mode: str, web: bool, agent: bool, provider_name: str):
         f"modelo: [bold green]{model or 'padrão'}[/bold green]\n"
         f"modo: [bold cyan]{mode}[/bold cyan]\n"
         f"web: [bold {'green' if web else 'red'}]{'on' if web else 'off'}[/bold {'green' if web else 'red'}]\n"
-        f"agente: [bold {'green' if agent else 'red'}]{'on' if agent else 'off'}[/bold {'green' if agent else 'red'}]\n\n"
-        "[dim]comandos: /model, /mode, /web, /tools, /clear, /agent, /provider, /save, /resume, /sessions, /sair[/dim]"
+        f"agente: [bold {'green' if agent else 'red'}]{'on' if agent else 'off'}[/bold {'green' if agent else 'red'}]\n"
+        f"plano: [bold {'green' if plan else 'red'}]{'on' if plan else 'off'}[/bold {'green' if plan else 'red'}]\n\n"
+        "[dim]comandos: /model, /mode, /web, /tools, /clear, /agent, /plan, /provider, /save, /resume, /sessions, /sair[/dim]"
     )
     console.print(Panel(body, title=title, border_style="green", expand=False))
 
@@ -126,6 +128,8 @@ def run(args, config):
     mode = args.mode
     web = args.web
     agent_mode = args.agent
+    plan_mode = False
+    plan_mode_step_confirm = config.get("plan_mode_step_confirm", False)
     max_tokens = args.max_tokens or 2048
     history = []
     current_session_id = None
@@ -220,7 +224,7 @@ def run(args, config):
         console.print(f"[dim]🪙 {session_tokens_used} tokens · ⏱ {_format_elapsed(time.time() - session_start_time)}[/dim]")
         return
 
-    _banner(model, mode, web, agent_mode, provider_name)
+    _banner(model, mode, web, agent_mode, plan_mode, provider_name)
     while True:
         try:
             user_input = console.input("[bold green]❯ [/bold green]").strip()
@@ -247,22 +251,27 @@ def run(args, config):
         if cmd.startswith("/model "):
             model = user_input.split(" ", 1)[1].strip() or None
             console.print(f"[dim]Modelo alterado para: {model or 'padrão'}[/dim]")
-            _banner(model, mode, web, agent_mode, provider_name)
+            _banner(model, mode, web, agent_mode, plan_mode, provider_name)
             continue
         if cmd.startswith("/mode "):
             mode = user_input.split(" ", 1)[1].strip()
             console.print(f"[dim]Modo alterado para: {mode}[/dim]")
-            _banner(model, mode, web, agent_mode, provider_name)
+            _banner(model, mode, web, agent_mode, plan_mode, provider_name)
             continue
         if cmd == "/web":
             web = not web
             console.print(f"[dim]Web: {'on' if web else 'off'}[/dim]")
-            _banner(model, mode, web, agent_mode, provider_name)
+            _banner(model, mode, web, agent_mode, plan_mode, provider_name)
             continue
         if cmd == "/agent":
             agent_mode = not agent_mode
             console.print(f"[dim]Agente: {'on' if agent_mode else 'off'}[/dim]")
-            _banner(model, mode, web, agent_mode, provider_name)
+            _banner(model, mode, web, agent_mode, plan_mode, provider_name)
+            continue
+        if cmd == "/plan":
+            plan_mode = not plan_mode
+            console.print(f"[dim]Plano: {'on' if plan_mode else 'off'}[/dim]")
+            _banner(model, mode, web, agent_mode, plan_mode, provider_name)
             continue
         if cmd.startswith("/provider "):
             new_name = user_input.split(" ", 1)[1].strip().lower()
@@ -271,7 +280,7 @@ def run(args, config):
                 provider_name = new_name
                 provider = new_provider
                 console.print(f"[dim]Provider alterado para: {provider_name}[/dim]")
-                _banner(model, mode, web, agent_mode, provider_name)
+                _banner(model, mode, web, agent_mode, plan_mode, provider_name)
             except Exception as e:
                 console.print(f"[red]Erro ao trocar provider: {e}[/red]")
             continue
@@ -303,6 +312,7 @@ def run(args, config):
                 f"modo: [bold cyan]{mode}[/bold cyan]",
                 f"web: [bold {'green' if web else 'red'}]{'on' if web else 'off'}[/bold {'green' if web else 'red'}]",
                 f"agente: [bold {'green' if agent_mode else 'red'}]{'on' if agent_mode else 'off'}[/bold {'green' if agent_mode else 'red'}]",
+                f"plano: [bold {'green' if plan_mode else 'red'}]{'on' if plan_mode else 'off'}[/bold {'green' if plan_mode else 'red'}]",
                 f"tokens: [bold yellow]{session_tokens_used}[/bold yellow]",
                 f"tempo: [bold yellow]{_format_elapsed(time.time() - session_start_time)}[/bold yellow]",
                 f"mensagens: [bold yellow]{len(history)}[/bold yellow]",
@@ -353,12 +363,28 @@ def run(args, config):
                 console.print(f"[dim]Sessão restaurada: {current_session_id}[/dim]")
             else:
                 console.print(f"[yellow]Sessão restaurada ({current_session_id}), mas sem mensagens.[/yellow]")
-            _banner(model, mode, web, agent_mode, provider_name)
+            _banner(model, mode, web, agent_mode, plan_mode, provider_name)
             continue
         if not user_input:
             continue
 
-        history.append({"role": "user", "content": user_input})
+        if plan_mode:
+            plan_text = generate_plan(provider, user_input, model, mode, web, max_tokens)
+            console.print(Panel(plan_text, title="Plano proposto", border_style="cyan"))
+            if not confirm("Aprovar este plano e iniciar execução?"):
+                continue
+            history.append({"role": "user", "content": user_input})
+
+            def _on_round_complete():
+                if plan_mode_step_confirm:
+                    return confirm("Continuar para o próximo passo?")
+                return None
+        else:
+            history.append({"role": "user", "content": user_input})
+
+            def _on_round_complete():
+                return None
+
         try:
             if agent_mode:
                 reply = run_agent(
@@ -371,6 +397,7 @@ def run(args, config):
                     on_tool_call=on_tool_call,
                     on_tool_result=on_tool_result,
                     on_thinking=on_thinking,
+                    on_round_complete=_on_round_complete,
                 )
                 history.append({"role": "assistant", "content": reply})
             else:

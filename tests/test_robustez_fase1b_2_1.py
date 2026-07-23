@@ -16,6 +16,7 @@ from thc_cli.core.agent import (
     _parse_tool_call,
     run_agent,
 )
+from thc_cli.core.plan import generate_plan
 from thc_cli.core.tools.file_tools import FileEditTool, FileWriteTool
 from thc_cli.core.tools.todo_tool import TodoWriteTool
 from thc_cli.core import session as session_mod
@@ -356,6 +357,53 @@ class TestDiffOutput(unittest.TestCase):
         with patch("thc_cli.core.ui.console.print") as mock_print:
             print_diff("linha original", "linha modificada", "/tmp/x.txt")
         self.assertTrue(mock_print.called)
+
+
+class TestPlanMode(unittest.TestCase):
+    def test_on_round_complete_interrompe_execucao(self):
+        provider = MagicMock()
+        provider.name = "thc"
+        provider.chat_completion.side_effect = [
+            {"choices": [{"message": {"content": "```tool_call\n{\"name\": \"read_file\", \"arguments\": {\"path\": \"/tmp/x\"}}\n```"}}]},
+            {"choices": [{"message": {"content": "```tool_call\n{\"name\": \"write_file\", \"arguments\": {\"path\": \"/tmp/x\", \"content\": \"mundo\"}}\n```"}}]},
+        ]
+        result = run_agent(
+            provider=provider,
+            messages=[{"role": "user", "content": "oi"}],
+            max_rounds=10,
+            on_tool_call=lambda name, args: None,
+            on_tool_result=lambda name, output: None,
+            on_round_complete=lambda: False,
+        )
+        self.assertEqual(result, "Execução interrompida pelo usuário durante o Plan Mode (passo a passo).")
+        self.assertEqual(provider.chat_completion.call_count, 1)
+
+    def test_on_round_complete_none_nao_afeta_comportamento(self):
+        provider = MagicMock()
+        provider.name = "thc"
+        provider.chat_completion.side_effect = [
+            {"choices": [{"message": {"content": "apenas texto"}}]},
+        ]
+        result = run_agent(
+            provider=provider,
+            messages=[{"role": "user", "content": "oi"}],
+            max_rounds=2,
+        )
+        self.assertIsInstance(result, str)
+        self.assertNotEqual(result, "")
+
+    def test_generate_plan_nao_usa_tools(self):
+        provider = MagicMock()
+        provider.chat_completion.return_value = {
+            "choices": [{"message": {"content": "1. Passo A\n2. Passo B"}}]
+        }
+        result = generate_plan(provider, "edite o arquivo /tmp/x")
+        provider.chat_completion.assert_called_once()
+        sent_messages = provider.chat_completion.call_args[1]["messages"]
+        sent_text = "\n".join(m["content"] for m in sent_messages)
+        self.assertNotIn("tool_call", sent_text)
+        self.assertNotIn("Tools disponíveis", sent_text)
+        self.assertEqual(result, "1. Passo A\n2. Passo B")
 
 
 if __name__ == "__main__":

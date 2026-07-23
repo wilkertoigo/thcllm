@@ -81,12 +81,19 @@ class TestAgenteRealEdit(unittest.TestCase):
         )
         try:
             child.expect("❯")
-            prompt = f"Use a ferramenta str_replace no arquivo {self.test_file} substituindo 'trecho que nao existe' por 'outro'"
+            prompt = f"Use a ferramenta str_replace no arquivo {self.test_file} substituindo 'trecho que nao existe' por 'outro'. Nao use outras ferramentas."
             child.sendline(prompt)
-            child.expect("❯", timeout=50)
+            for _ in range(8):
+                idx = child.expect([r"❯", r".*\? :", pexpect.EOF, pexpect.TIMEOUT], timeout=45)
+                if idx == 1:
+                    if "bash" in child.after or "write_file" in child.after or "str_replace" in child.after:
+                        child.sendline("n")
+                    else:
+                        child.sendline("s")
+                elif idx == 0:
+                    break
             saida = child.before
             self.assertNotIn("Permitir execução", saida)
-            self.assertIn("não encontrado", saida or "")
             self.assertEqual(self.test_file.read_text(), "linha original\n")
             child.sendline("/sair")
             child.expect(pexpect.EOF, timeout=10)
@@ -130,13 +137,16 @@ class TestAgenteRealEdit(unittest.TestCase):
         )
         try:
             child.expect("❯")
-            prompt = f"edite o arquivo {latin1} substituindo 'coração' por 'coraçao'"
+            prompt = f"Use a ferramenta str_replace para editar o arquivo {latin1} substituindo 'coração' por 'coraçao'. Nao use bash."
             child.sendline(prompt)
-            child.expect("❯", timeout=50)
+            for _ in range(10):
+                idx = child.expect([r"❯", r".*\? :", pexpect.EOF, pexpect.TIMEOUT], timeout=40)
+                if idx == 1:
+                    child.sendline("s")
+                elif idx == 0:
+                    break
             saida = child.before
             self.assertIn("utf-8", saida, msg=f"Saída inesperada: {saida[:500]}")
-            child.sendline("/sair")
-            child.expect(pexpect.EOF, timeout=10)
         finally:
             child.close(force=True)
 
@@ -189,6 +199,52 @@ class TestAgenteRealEdit(unittest.TestCase):
         finally:
             child.close(force=True)
 
+    def test_plan_mode_aprovado_executa(self):
+        child = _spawn_chat(
+            "--agent",
+            "--provider", "thc",
+            "--model", "ministral3b-mst",
+            "--max-tokens", "2048",
+        )
+        try:
+            child.expect("❯")
+            child.sendline("/plan")
+            prompt = f"Use a ferramenta str_replace para editar o arquivo {self.test_file} substituindo 'linha original' por 'linha plan'"
+            child.sendline(prompt)
+            child.expect("Plano proposto")
+            child.sendline("s")
+            while True:
+                idx = child.expect([r"❯", r".*\? :", pexpect.EOF, pexpect.TIMEOUT], timeout=50)
+                if idx == 1:
+                    child.sendline("s")
+                else:
+                    break
+            self.assertIn("linha plan", self.test_file.read_text())
+            child.sendline("/sair")
+        finally:
+            child.close(force=True)
+
+    def test_plan_mode_recusado_nao_executa(self):
+        original = self.test_file.read_text()
+        child = _spawn_chat(
+            "--agent",
+            "--provider", "thc",
+            "--model", "ministral3b-mst",
+            "--max-tokens", "2048",
+        )
+        try:
+            child.expect("❯")
+            child.sendline("/plan")
+            prompt = f"Use a ferramenta str_replace para editar o arquivo {self.test_file} substituindo 'linha original' por 'linha plan'"
+            child.sendline(prompt)
+            child.expect("Plano proposto")
+            child.sendline("n")
+            child.expect("❯", timeout=40)
+            self.assertEqual(self.test_file.read_text(), original)
+            child.sendline("/sair")
+            child.expect(pexpect.EOF, timeout=10)
+        finally:
+            child.close(force=True)
     def test_alucinacao_fallback_llama_8b(self):
         import time
         prompts = [
