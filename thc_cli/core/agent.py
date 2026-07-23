@@ -23,9 +23,10 @@ RAW_TOOL_CALL_PATTERN = re.compile(
 )
 
 
-def _build_tools_prompt() -> str:
+def _build_tools_prompt(tools=None):
+    registry = tools if tools is not None else ALL_TOOLS
     payload = []
-    for tool in ALL_TOOLS:
+    for tool in registry:
         payload.append({
             "name": tool.name,
             "description": tool.description,
@@ -115,8 +116,13 @@ def run_agent(
     on_tool_result: Optional[callable] = None,
     on_thinking: Optional[callable] = None,
     on_round_complete: Optional[callable] = None,
+    skill: Optional[dict] = None,
 ) -> str:
-    tools_description = _build_tools_prompt()
+    tools_to_use = TOOLS_BY_NAME
+    if skill and skill.get("tools_allowed"):
+        allowed = set(skill["tools_allowed"])
+        tools_to_use = {k: v for k, v in TOOLS_BY_NAME.items() if k in allowed}
+    tools_description = _build_tools_prompt(tools=list(tools_to_use.values()))
     memory_store = MemoryStore()
     pinned = memory_store.get_pinned()
     system_prompt = (
@@ -128,6 +134,8 @@ def run_agent(
         f"Tools disponíveis:\n{tools_description}\n"
         "Quando a pergunta for respondida, retorne a resposta final em texto livre, sem tool_call.\n"
     )
+    if skill and skill.get("system_prompt_extra"):
+        system_prompt += "\n\n## Skill ativa: " + skill["name"] + "\n" + skill["system_prompt_extra"]
     messages = [{"role": "system", "content": system_prompt}] + list(messages)
     for _ in range(max_rounds):
         messages = _truncate_history(messages)
@@ -174,7 +182,7 @@ def run_agent(
                     if on_tool_result:
                         on_tool_result(call["name"], output)
                     continue
-            tool = TOOLS_BY_NAME[call["name"]]
+            tool = tools_to_use[call["name"]]
             output = tool.run(**call.get("arguments", {}))
             if on_tool_result:
                 on_tool_result(call["name"], output)

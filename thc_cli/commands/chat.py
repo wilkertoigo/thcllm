@@ -15,6 +15,7 @@ from ..core.memory import MemoryStore
 from ..core.plan import generate_plan
 from ..core.providers import get_provider
 from ..core.session import list_sessions, load_session, save_session
+from ..core.skills import SkillStore
 from ..core.system_prompt import build_base_system_prompt
 from ..core.tokens import count_tokens, count_tokens_messages
 from ..core.tools import DESTRUCTIVE_TOOLS, TOOLS_BY_NAME
@@ -138,6 +139,9 @@ def run(args, config):
     session_tokens_used = 0
     memory_store = MemoryStore()
     pinned_memories = memory_store.get_pinned()
+    skill_store = SkillStore()
+    skill_store.seed()
+    active_skill = getattr(args, "skill_obj", None) if args else None
 
     def _render_reply(text: str):
         console.print(Markdown(text))
@@ -195,6 +199,7 @@ def run(args, config):
                     on_tool_call=on_tool_call,
                     on_tool_result=on_tool_result,
                     on_thinking=on_thinking,
+                    skill=active_skill,
                 )
             except Exception as e:
                 print(f"Erro: {e}", file=sys.stderr)
@@ -316,12 +321,53 @@ def run(args, config):
                 f"web: [bold {'green' if web else 'red'}]{'on' if web else 'off'}[/bold {'green' if web else 'red'}]",
                 f"agente: [bold {'green' if agent_mode else 'red'}]{'on' if agent_mode else 'off'}[/bold {'green' if agent_mode else 'red'}]",
                 f"plano: [bold {'green' if plan_mode else 'red'}]{'on' if plan_mode else 'off'}[/bold {'green' if plan_mode else 'red'}]",
+                f"skill: [bold magenta]{(active_skill or {}).get('name', 'nenhuma')}[/bold magenta]",
                 f"tokens: [bold yellow]{session_tokens_used}[/bold yellow]",
                 f"tempo: [bold yellow]{_format_elapsed(time.time() - session_start_time)}[/bold yellow]",
                 f"mensagens: [bold yellow]{len(history)}[/bold yellow]",
                 f"session_id: [bold cyan]{current_session_id or 'nenhuma'}[/bold cyan]",
             ]
             console.print(Panel("\n".join(status_lines), title="Status", border_style="cyan"))
+            continue
+        if cmd == "/skills":
+            skills = skill_store.list_all()
+            if not skills:
+                console.print("[dim]Nenhuma skill disponível.[/dim]")
+                continue
+            lines = []
+            for s in skills:
+                marker = " [cyan](ativa)[/cyan]" if active_skill and active_skill.get("name") == s["name"] else ""
+                lines.append(f"- [bold green]{s['name']}[/bold green]{marker}: {s['description']}")
+            console.print(Panel("\n".join(lines), title="Skills", border_style="cyan"))
+            continue
+        if cmd.startswith("/skills activate "):
+            name = user_input[len("/skills activate "):].strip()
+            skill = skill_store.get(name)
+            if skill is None:
+                console.print(f"[red]Skill não encontrada: {name}[/red]")
+                continue
+            active_skill = skill
+            console.print(f"[dim]Skill ativada: {name}[/dim]")
+            _banner(model, mode, web, agent_mode, plan_mode, provider_name)
+            continue
+        if cmd == "/skills deactivate":
+            active_skill = None
+            console.print("[dim]Skill desativada.[/dim]")
+            _banner(model, mode, web, agent_mode, plan_mode, provider_name)
+            continue
+        if cmd.startswith("/skills show "):
+            name = user_input[len("/skills show "):].strip()
+            skill = skill_store.get(name)
+            if skill is None:
+                console.print(f"[red]Skill não encontrada: {name}[/red]")
+                continue
+            lines = [
+                f"[bold green]name:[/bold green] {skill['name']}",
+                f"[bold green]description:[/bold green] {skill['description']}",
+                f"[bold green]system_prompt_extra:[/bold green]\n{skill.get('system_prompt_extra', '')}",
+                f"[bold green]tools_allowed:[/bold green] {', '.join(skill.get('tools_allowed', [])) or 'todas'}",
+            ]
+            console.print(Panel("\n".join(lines), title=f"Skill: {name}", border_style="cyan"))
             continue
         if cmd == "/memory":
             entries = memory_store.list_all()
@@ -471,11 +517,12 @@ def run(args, config):
                     on_tool_result=on_tool_result,
                     on_thinking=on_thinking,
                     on_round_complete=_on_round_complete,
+                    skill=active_skill,
                 )
                 history.append({"role": "assistant", "content": reply})
             else:
                 with print_thinking_spinner():
-                    messages_to_send = [{"role": "system", "content": build_base_system_prompt()}] + history
+                    messages_to_send = [{"role": "system", "content": build_base_system_prompt(pinned_memories=pinned_memories if pinned_memories else None)}] + history
                     if web and not _is_thc_provider(provider):
                         last_user_message = next((m["content"] for m in reversed(history) if m.get("role") == "user"), "")
                         if last_user_message:

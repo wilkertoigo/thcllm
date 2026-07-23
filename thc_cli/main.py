@@ -1,6 +1,7 @@
 import argparse
 import importlib
 import pkgutil
+import sys
 
 from .core import load_config
 
@@ -15,6 +16,8 @@ def main():
         if hasattr(module, "register"):
             module.register(subparsers)
     
+    parser.add_argument("--skill", help="Skill a ativar (nome da skill em ~/.thc/skills/)")
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -23,6 +26,17 @@ def main():
     
     config = load_config()
     
+    if args.skill:
+        from .core.skills import SkillStore
+        store = SkillStore()
+        skill = store.get(args.skill)
+        if skill is None:
+            print(f"Skill não encontrada: {args.skill}", file=sys.stderr)
+            sys.exit(1)
+        if not hasattr(args, "skill_obj"):
+            args.skill_obj = None
+        args.skill_obj = skill
+    
     from . import commands as commands_pkg
     for _, module_name, _ in pkgutil.iter_modules(commands_pkg.__path__, commands_pkg.__name__ + "."):
         module = importlib.import_module(module_name)
@@ -30,5 +44,5 @@ def main():
             module.run(args, config)
             return
     
-    print(f"Comando desconhecido: {args.command}", file=__import__('sys').stderr)
-    __import__('sys').exit(1)
+    print(f"Comando desconhecido: {args.command}", file=sys.stderr)
+    sys.exit(1)
