@@ -357,7 +357,8 @@ def get_current_user(request: Request):
     if email and is_authorized_email(email):
         return email
     api_key = request.headers.get("X-THC-Key")
-    if api_key == "THC_MASTER_CLI_2026": return "wilkerrobertsomtoigo@gmail.com"
+    MASTER_CLI_KEY =THC_CLI_150fd2a160cbe9d90c3457cebccef7a6 os.environ.get("THC_MASTER_CLI_KEY", "")
+    if MASTER_CLI_KEY and api_key == MASTER_CLI_KEY: return "wilkerrobertsomtoigo@gmail.com"
     if api_key:
         email = verify_api_key(api_key)
         if email and is_authorized_email(email):
