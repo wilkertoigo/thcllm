@@ -1,0 +1,48 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "model": "openai-compatible/hy3-free",
+  "provider": {
+    "openai-compatible": {
+      "options": {
+        "apiKey": "dummy",
+        "baseURL": "https://hulktoigo-thcllm.hf.space/v1"
+      },
+      "models": {
+        "hy3-free": {
+          "name": "THC: Hy3 295B (free)",
+          "tool_call": true,
+          "limit": { "context": 131072, "output": 8192 }
+        },
+        "nemotron-ultra-free": {
+          "name": "THC: Nemotron Ultra 550B (free)",
+          "tool_call": true,
+          "limit": { "context": 131072, "output": 8192 }
+        },
+        "llama33-70b-groq": {
+          "name": "THC: Llama 3.3 70B (Groq)",
+          "tool_call": true,
+          "limit": { "context": 131072, "output": 8192 }
+        },
+        "compound-groq": {
+          "name": "THC: Compound Agent (Groq)",
+          "tool_call": true,
+          "limit": { "context": 131072, "output": 2048 }
+        },
+        "gemini35-flash": {
+          "name": "THC: Gemini 3.5 Flash",
+          "tool_call": true,
+          "limit": { "context": 1000000, "output": 8192 }
+        },
+        "devstral-mst": {
+          "name": "THC: Devstral Coder (Mistral)",
+          "tool_call": true,
+          "limit": { "context": 131072, "output": 8192 }
+        },
+        "deepseek-r1-distill-14b": {
+          "name": "THC: DeepSeek R1 14B (local)",
+          "limit": { "context": 8192, "output": 8192 }
+        }
+      }
+    }
+  }
+}

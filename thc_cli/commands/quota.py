@@ -1,11 +1,13 @@
 import argparse
+from ..core.client import THCClient
 
 
 def register(subparsers):
     subparsers.add_parser("quota", help="Mostra as quotas de uso")
 
 
-def run(args, client):
+def run(args, config):
+    client = THCClient(config)
     result = client.get_quota()
     quotas = result.get("quotas", [])
     

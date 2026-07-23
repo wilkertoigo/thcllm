@@ -1,11 +1,13 @@
 import argparse
+from ..core.client import THCClient
 
 
 def register(subparsers):
     subparsers.add_parser("models", help="Lista os modelos disponíveis")
 
 
-def run(args, client):
+def run(args, config):
+    client = THCClient(config)
     result = client.list_models()
     models = result.get("text_models", [])
     

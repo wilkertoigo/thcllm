@@ -18,5 +18,20 @@ def load_config() -> dict:
     
     endpoint = os.environ.get("THC_ENDPOINT") or file_config.get("endpoint") or DEFAULT_ENDPOINT
     api_key = os.environ.get("THC_API_KEY") or file_config.get("api_key")
+    provider = os.environ.get("THC_PROVIDER") or file_config.get("provider", "thc")
+    provider_keys = dict(file_config.get("provider_keys", {}))
+    for key_name, env_name in [
+        ("groq", "GROQ_API_KEY"),
+        ("mistral", "MISTRAL_API_KEY"),
+        ("gemini", "GEMINI_API_KEY"),
+        ("openrouter", "OPENROUTER_API_KEY"),
+    ]:
+        if env_name in os.environ:
+            provider_keys[key_name] = os.environ[env_name]
     
-    return {"endpoint": endpoint, "api_key": api_key}
+    return {
+        "endpoint": endpoint,
+        "api_key": api_key,
+        "provider": provider,
+        "provider_keys": provider_keys,
+    }

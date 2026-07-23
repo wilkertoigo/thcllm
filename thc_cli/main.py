@@ -2,7 +2,7 @@ import argparse
 import importlib
 import pkgutil
 
-from .core import load_config, THCClient
+from .core import load_config
 
 
 def main():
@@ -22,13 +22,12 @@ def main():
         return
     
     config = load_config()
-    client = THCClient(config)
     
     from . import commands as commands_pkg
     for _, module_name, _ in pkgutil.iter_modules(commands_pkg.__path__, commands_pkg.__name__ + "."):
         module = importlib.import_module(module_name)
         if hasattr(module, "run") and module_name.endswith(f".{args.command}"):
-            module.run(args, client)
+            module.run(args, config)
             return
     
     print(f"Comando desconhecido: {args.command}", file=__import__('sys').stderr)

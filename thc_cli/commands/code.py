@@ -3,6 +3,7 @@ import sys
 import os
 
 from ..core import print_thinking_spinner, print_diff, confirm
+from ..core.providers import get_provider
 
 
 def register(subparsers):
@@ -13,7 +14,7 @@ def register(subparsers):
     parser.add_argument("--mode", choices=["fast", "medium", "thinking"], default="thinking", help="Modo de raciocínio")
 
 
-def run(args, client):
+def run(args, config):
     if not os.path.exists(args.arquivo):
         print(f"Erro: Arquivo não encontrado: {args.arquivo}", file=sys.stderr)
         sys.exit(1)
@@ -31,13 +32,31 @@ def run(args, client):
         {"role": "user", "content": f"Arquivo: {args.arquivo}\n\nInstrução: {args.instrucao}\n\nConteúdo atual:\n{original_content}"}
     ]
     
+    provider_name = config.get("provider", "thc")
+    try:
+        provider = get_provider(provider_name, config)
+    except Exception as e:
+        print(f"Erro ao inicializar provider '{provider_name}': {e}", file=sys.stderr)
+        sys.exit(1)
+    
     try:
         with print_thinking_spinner():
-            result = client.chat_completion(
-                messages=messages,
-                model=args.model,
-                mode=args.mode or "thinking"
-            )
+            if provider_name == "thc":
+                result = provider.chat_completion(
+                    messages=messages,
+                    model=args.model,
+                    mode=args.mode or "thinking",
+                    web=False,
+                    max_tokens=8192,
+                    temperature=0.7,
+                )
+            else:
+                result = provider.chat_completion(
+                    messages=messages,
+                    model=args.model,
+                    max_tokens=8192,
+                    temperature=0.7,
+                )
         new_content = result["choices"][0]["message"]["content"]
         
         print_diff(original_content, new_content, args.arquivo)
