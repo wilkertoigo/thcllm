@@ -82,6 +82,32 @@ class TestRetryMalformado(unittest.TestCase):
         self.assertIsInstance(result, str)
         self.assertNotEqual(result, "")
 
+    def test_retry_corrige_json_malformado_e_executa_tool(self):
+        import tempfile
+        from pathlib import Path
+
+        tmp = tempfile.TemporaryDirectory()
+        target = Path(tmp.name) / "out.txt"
+        target.write_text("ola", encoding="utf-8")
+
+        provider = MagicMock()
+        provider.name = "thc"
+        provider.chat_completion.side_effect = [
+            {"choices": [{"message": {"content": "```tool_call\n{\"name\": \"write_file\", \"arguments\": {\"path\": \"" + str(target) + "\", \"content\": \"mundo\"}},\n```"}}]},
+            {"choices": [{"message": {"content": "```tool_call\n{\"name\": \"write_file\", \"arguments\": {\"path\": \"" + str(target) + "\", \"content\": \"mundo\"}}\n```"}}]},
+            {"choices": [{"message": {"content": "Arquivo atualizado com sucesso."}}]},
+        ]
+        result = run_agent(
+            provider=provider,
+            messages=[{"role": "user", "content": "escreva 'mundo' em " + str(target)}],
+            max_rounds=5,
+            on_tool_call=lambda name, args: None,
+            on_tool_result=lambda name, output: None,
+        )
+        self.assertEqual(target.read_text(encoding="utf-8"), "mundo")
+        self.assertEqual(result, "Arquivo atualizado com sucesso.")
+        tmp.cleanup()
+
 
 class TestSessionPersistence(unittest.TestCase):
     def setUp(self):

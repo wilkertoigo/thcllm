@@ -1,6 +1,7 @@
 import argparse
 import re
 import sys
+import time
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -13,6 +14,7 @@ from ..core.agent import run_agent
 from ..core.providers import get_provider
 from ..core.session import list_sessions, load_session, save_session
 from ..core.system_prompt import build_base_system_prompt
+from ..core.tokens import count_tokens, count_tokens_messages
 from ..core.tools import DESTRUCTIVE_TOOLS, TOOLS_BY_NAME
 
 console = Console()
@@ -95,6 +97,12 @@ def _provider_chat(provider, messages, model, mode, web, max_tokens=8192, temper
     )
 
 
+def _format_elapsed(seconds: float) -> str:
+    minutes = int(seconds // 60)
+    secs = int(seconds % 60)
+    return f"{minutes}m{secs:02d}s"
+
+
 def register(subparsers):
     parser = subparsers.add_parser("chat", help="Chat interativo com TUI rica")
     parser.add_argument("prompt", nargs="?", help="Texto da pergunta")
@@ -121,6 +129,8 @@ def run(args, config):
     max_tokens = args.max_tokens or 2048
     history = []
     current_session_id = None
+    session_start_time = time.time()
+    session_tokens_used = 0
 
     def _render_reply(text: str):
         console.print(Markdown(text))
@@ -206,6 +216,8 @@ def run(args, config):
                 print(f"Erro: {e}", file=sys.stderr)
                 sys.exit(1)
         _render_reply(reply)
+        session_tokens_used += count_tokens(args.prompt or "") + count_tokens(reply)
+        console.print(f"[dim]🪙 {session_tokens_used} tokens · ⏱ {_format_elapsed(time.time() - session_start_time)}[/dim]")
         return
 
     _banner(model, mode, web, agent_mode, provider_name)
@@ -283,6 +295,20 @@ def run(args, config):
                         s.get("preview", ""),
                     )
                 console.print(table)
+            continue
+        if cmd == "/status":
+            status_lines = [
+                f"provider: [bold green]{provider_name}[/bold green]",
+                f"modelo: [bold green]{model or 'padrão'}[/bold green]",
+                f"modo: [bold cyan]{mode}[/bold cyan]",
+                f"web: [bold {'green' if web else 'red'}]{'on' if web else 'off'}[/bold {'green' if web else 'red'}]",
+                f"agente: [bold {'green' if agent_mode else 'red'}]{'on' if agent_mode else 'off'}[/bold {'green' if agent_mode else 'red'}]",
+                f"tokens: [bold yellow]{session_tokens_used}[/bold yellow]",
+                f"tempo: [bold yellow]{_format_elapsed(time.time() - session_start_time)}[/bold yellow]",
+                f"mensagens: [bold yellow]{len(history)}[/bold yellow]",
+                f"session_id: [bold cyan]{current_session_id or 'nenhuma'}[/bold cyan]",
+            ]
+            console.print(Panel("\n".join(status_lines), title="Status", border_style="cyan"))
             continue
         if cmd == "/save":
             try:
@@ -367,5 +393,7 @@ def run(args, config):
                 reply = result["choices"][0]["message"]["content"]
                 history.append({"role": "assistant", "content": reply})
             _render_reply(reply)
+            session_tokens_used += count_tokens(user_input or "") + count_tokens(reply)
+            console.print(f"[dim]🪙 {session_tokens_used} tokens · ⏱ {_format_elapsed(time.time() - session_start_time)}[/dim]")
         except Exception as e:
             console.print(f"[red]Erro: {e}[/red]")
