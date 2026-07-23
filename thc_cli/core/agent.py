@@ -2,6 +2,7 @@ import json
 import re
 from typing import Optional
 
+from .memory import MemoryStore
 from .system_prompt import build_base_system_prompt
 from .tools import ALL_TOOLS, TOOLS_BY_NAME
 
@@ -116,8 +117,10 @@ def run_agent(
     on_round_complete: Optional[callable] = None,
 ) -> str:
     tools_description = _build_tools_prompt()
+    memory_store = MemoryStore()
+    pinned = memory_store.get_pinned()
     system_prompt = (
-        build_base_system_prompt() + "\n\n" +
+        build_base_system_prompt(pinned_memories=pinned if pinned else None) + "\n\n" +
         "Você é um assistente agente. Para usar uma ferramenta, responda EXATAMENTE neste formato:\n"
         "```tool_call\n"
         "{\"name\": \"<nome_da_tool>\", \"arguments\": {<args_json>}}\n"

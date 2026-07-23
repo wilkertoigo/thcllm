@@ -11,6 +11,7 @@ from rich.text import Text
 
 from ..core import print_thinking_spinner, print_diff, confirm
 from ..core.agent import run_agent
+from ..core.memory import MemoryStore
 from ..core.plan import generate_plan
 from ..core.providers import get_provider
 from ..core.session import list_sessions, load_session, save_session
@@ -135,6 +136,8 @@ def run(args, config):
     current_session_id = None
     session_start_time = time.time()
     session_tokens_used = 0
+    memory_store = MemoryStore()
+    pinned_memories = memory_store.get_pinned()
 
     def _render_reply(text: str):
         console.print(Markdown(text))
@@ -198,7 +201,7 @@ def run(args, config):
                 sys.exit(1)
         else:
             messages = [
-                {"role": "system", "content": build_base_system_prompt()},
+                {"role": "system", "content": build_base_system_prompt(pinned_memories=pinned_memories if pinned_memories else None)},
             ]
             if web and not _is_thc_provider(provider):
                 web_msg = _build_web_search_system_message(args.prompt)
@@ -319,6 +322,76 @@ def run(args, config):
                 f"session_id: [bold cyan]{current_session_id or 'nenhuma'}[/bold cyan]",
             ]
             console.print(Panel("\n".join(status_lines), title="Status", border_style="cyan"))
+            continue
+        if cmd == "/memory":
+            entries = memory_store.list_all()
+            if not entries:
+                console.print("[dim]Memória vazia.[/dim]")
+                continue
+            lines = []
+            for entry in entries:
+                short_id = entry["id"][:8]
+                pinned_str = "[pinned] " if entry.get("pinned") else ""
+                preview = entry["content"][:60]
+                tags_str = ", ".join(entry.get("tags", [])) or "sem tags"
+                lines.append(f"[cyan]{short_id}[/cyan] {pinned_str}{preview}   tags: {tags_str}")
+            console.print(Panel("\n".join(lines), title="Memória", border_style="cyan"))
+            continue
+        if cmd.startswith("/memory add "):
+            text = user_input[len("/memory add "):].strip()
+            if not text:
+                console.print("[red]Uso: /memory add <texto>[/red]")
+                continue
+            entry = memory_store.add(text, pinned=False)
+            console.print(f"[dim]Memória salva: {entry['id'][:8]}[/dim]")
+            continue
+        if cmd.startswith("/memory pin "):
+            text = user_input[len("/memory pin "):].strip()
+            if not text:
+                console.print("[red]Uso: /memory pin <texto>[/red]")
+                continue
+            entry = memory_store.add(text, pinned=True)
+            console.print(f"[dim]Memória pinned salva: {entry['id'][:8]}[/dim]")
+            continue
+        if cmd.startswith("/memory search "):
+            q = user_input[len("/memory search "):].strip()
+            results = memory_store.search(q)
+            if not results:
+                console.print("[dim]Nenhuma entrada encontrada.[/dim]")
+                continue
+            lines = []
+            for entry in results:
+                short_id = entry["id"][:8]
+                pinned_str = "[pinned] " if entry.get("pinned") else ""
+                preview = entry["content"][:60]
+                tags_str = ", ".join(entry.get("tags", [])) or "sem tags"
+                lines.append(f"[cyan]{short_id}[/cyan] {pinned_str}{preview}   tags: {tags_str}")
+            console.print(Panel("\n".join(lines), title=f"Resultados da busca: {q}", border_style="cyan"))
+            continue
+        if cmd.startswith("/memory rm "):
+            target = user_input[len("/memory rm "):].strip()
+            if not target:
+                console.print("[red]Uso: /memory rm <id>[/red]")
+                continue
+            entries = memory_store.list_all()
+            match = None
+            for entry in entries:
+                if entry["id"].startswith(target):
+                    match = entry
+                    break
+            if match is None:
+                console.print(f"[red]Entrada não encontrada: {target}[/red]")
+                continue
+            memory_store.delete(match["id"])
+            console.print(f"[dim]Memória removida: {match['id'][:8]}[/dim]")
+            continue
+        if cmd == "/memory clear":
+            if not confirm("Apagar TODA a memória?"):
+                console.print("[dim]Limpeza cancelada.[/dim]")
+                continue
+            for entry in list(memory_store.list_all()):
+                memory_store.delete(entry["id"])
+            console.print("[dim]Memória limpa.[/dim]")
             continue
         if cmd == "/save":
             try:
