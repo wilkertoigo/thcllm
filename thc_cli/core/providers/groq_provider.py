@@ -1,7 +1,7 @@
 import httpx
 from typing import Optional
 
-from .base import BaseProvider
+from .base import BaseProvider, ProviderRateLimitError
 
 
 GROQ_MODELS = [
@@ -37,6 +37,8 @@ class GroqProvider(BaseProvider):
         }
         with httpx.Client(timeout=120.0) as client:
             resp = client.post(self.endpoint, json=payload, headers=headers)
+        if resp.status_code == 429:
+            raise ProviderRateLimitError(self.name, status_code=resp.status_code, message="Rate limited")
         resp.raise_for_status()
         return resp.json()
 

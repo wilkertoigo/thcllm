@@ -13,7 +13,9 @@ from ..core import print_thinking_spinner, print_diff, confirm
 from ..core.agent import run_agent
 from ..core.memory import MemoryStore
 from ..core.plan import generate_plan
+from ..core.provider_fallback import chat_completion_with_fallback
 from ..core.providers import get_provider
+from ..core.providers.base import ProviderRateLimitError
 from ..core.session import list_sessions, load_session, save_session
 from ..core.skills import SkillStore
 from ..core.system_prompt import build_base_system_prompt
@@ -99,6 +101,25 @@ def _provider_chat(provider, messages, model, mode, web, max_tokens=8192, temper
         max_tokens=max_tokens,
         temperature=temperature,
     )
+
+
+def _provider_chat_with_fallback(provider, provider_name, messages, model, mode, web, max_tokens, temperature, config, fallback_order):
+    if _is_thc_provider(provider):
+        return _provider_chat(provider, messages, model, mode, web, max_tokens, temperature), provider_name
+    
+    if not fallback_order:
+        return _provider_chat(provider, messages, model, mode, web, max_tokens, temperature), provider_name
+    
+    def _on_fallback(from_name, to_name):
+        console.print(f"[yellow]⚠ {from_name} atingiu rate limit — mudando para {to_name}[/yellow]")
+    try:
+        result, used_name = chat_completion_with_fallback(
+            messages, model, max_tokens, temperature, config or {},
+            fallback_order, provider_name, on_fallback=_on_fallback,
+        )
+        return result, used_name
+    except ProviderRateLimitError as e:
+        raise ProviderRateLimitError(provider_name, status_code=getattr(e, 'status_code', None), message=str(e))
 
 
 def _format_elapsed(seconds: float) -> str:
@@ -200,6 +221,8 @@ def run(args, config):
                     on_tool_result=on_tool_result,
                     on_thinking=on_thinking,
                     skill=active_skill,
+                    fallback_order=config.get("provider_fallback_order", []),
+                    config=config,
                 )
             except Exception as e:
                 print(f"Erro: {e}", file=sys.stderr)
@@ -212,17 +235,25 @@ def run(args, config):
                 web_msg = _build_web_search_system_message(args.prompt)
                 if web_msg:
                     messages.append(web_msg)
-            messages.append({"role": "user", "content": args.prompt})
+                messages.append({"role": "user", "content": args.prompt})
             try:
                 with print_thinking_spinner():
-                    result = _provider_chat(
-                        provider=provider,
-                        messages=messages,
-                        model=model,
-                        mode=mode,
-                        web=web,
-                        max_tokens=max_tokens,
-                    )
+                    try:
+                        result, used_name = _provider_chat_with_fallback(
+                            provider=provider,
+                            provider_name=provider_name,
+                            messages=messages,
+                            model=model,
+                            mode=mode,
+                            web=web,
+                            max_tokens=max_tokens,
+                            temperature=0.7,
+                            config=config,
+                            fallback_order=config.get("provider_fallback_order", []),
+                        )
+                    except ProviderRateLimitError as e:
+                        console.print(f"[red]Erro: todos os providers da lista de fallback falharam ({e})[/red]")
+                        raise
                 reply = result["choices"][0]["message"]["content"]
             except Exception as e:
                 print(f"Erro: {e}", file=sys.stderr)
@@ -518,6 +549,8 @@ def run(args, config):
                     on_thinking=on_thinking,
                     on_round_complete=_on_round_complete,
                     skill=active_skill,
+                    fallback_order=config.get("provider_fallback_order", []),
+                    config=config,
                 )
                 history.append({"role": "assistant", "content": reply})
             else:
@@ -529,14 +562,29 @@ def run(args, config):
                             web_msg = _build_web_search_system_message(last_user_message)
                             if web_msg:
                                 messages_to_send.insert(1, web_msg)
-                    result = _provider_chat(
-                        provider=provider,
-                        messages=messages_to_send,
-                        model=model,
-                        mode=mode,
-                        web=web,
-                        max_tokens=max_tokens,
-                    )
+                    try:
+                        result, used_name = _provider_chat_with_fallback(
+                            provider=provider,
+                            provider_name=provider_name,
+                            messages=messages_to_send,
+                            model=model,
+                            mode=mode,
+                            web=web,
+                            max_tokens=max_tokens,
+                            temperature=0.7,
+                            config=config,
+                            fallback_order=config.get("provider_fallback_order", []),
+                        )
+                    except ProviderRateLimitError as e:
+                        console.print(f"[red]Erro: todos os providers da lista de fallback falharam ({e})[/red]")
+                        raise
+                    if used_name and used_name != provider_name:
+                        try:
+                            provider_name = used_name
+                            provider = get_provider(used_name, config)
+                            _banner(model, mode, web, agent_mode, plan_mode, provider_name)
+                        except Exception as e:
+                            console.print(f"[red]Erro ao aplicar fallback para {used_name}: {e}[/red]")
                 reply = result["choices"][0]["message"]["content"]
                 history.append({"role": "assistant", "content": reply})
             _render_reply(reply)

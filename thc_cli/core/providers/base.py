@@ -1,3 +1,10 @@
+class ProviderRateLimitError(Exception):
+    def __init__(self, provider_name: str, status_code: int = None, message: str = ""):
+        self.provider_name = provider_name
+        self.status_code = status_code
+        super().__init__(message or f"{provider_name}: rate limit ou quota excedida")
+
+
 class BaseProvider:
     name: str = ""
 

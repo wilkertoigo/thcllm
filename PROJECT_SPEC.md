@@ -4,7 +4,7 @@ INTEIRO antes de iniciar qualquer tarefa, e revisitar a seção de Guardrails
 e Lições Aprendidas durante a execução. Se algo aqui divergir do código
 real, pare e reporte — não assuma, não invente.
 
-Última atualização: 2026-07-23 — pós Fase 2.3 (Plan Mode)
+Última atualização: 2026-07-23 — pós Fase 5 (fallback automático de providers)
 
 ---
 
@@ -72,11 +72,19 @@ test_robustez_fase1b_2_1.py, test_agente_real_pexpect.py, test_tokens.py
 - [x] Fase 2.3 — Plan Mode (/plan, generate_plan(), on_round_complete,
       plan_mode_step_confirm em ~/.thcrc) — 50 testes OK
 - [ ] Fase 2.2 — Streaming (rich.live.Live) — ADIADA DE PROPÓSITO para o final
-- [ ] Fase 3 — Skills plug-and-play (~/.thc/skills/<nome>/SKILL.md)
-- [ ] Fase 4 — MCP (MCPTool, config em ~/.thcrc)
-- [ ] Fase 5 — Sub-agentes/orquestração (AgentTool, TaskCreateTool)
-- [ ] Fase 6 — Integrações de sistema (browser, LSP, git worktree)
-- [ ] Fase 7 — Empacotamento (pip install thc-cli, testes, CI)
+- [x] Fase 3 — Memória de longo prazo (MemoryStore, memory_write/read tools,
+      pinned entries, injetadas automaticamente no system prompt)
+      commit: f7583f1
+- [x] Fase 4 — Skills plug-and-play (SkillStore, /skills REPL, --skill CLI,
+      tools_allowed, system_prompt_extra) — 18 testes
+      commit: 8f1edf5
+- [x] Fase 5 — Provider padrão + fallback automático por rate limit
+      (default openrouter, ProviderRateLimitError, chat_completion_with_fallback,
+      ordem configurável em ~/.thcrc, thc fora da cadeia automática)
+- [ ] Fase 6 — MCP (MCPTool, config em ~/.thcrc)
+- [ ] Fase 7 — Sub-agentes/orquestração (AgentTool, TaskCreateTool)
+- [ ] Fase 8 — Integrações de sistema (browser, LSP, git worktree)
+- [ ] Fase 9 — Empacotamento (pip install thc-cli, testes, CI)
 
 ## 5. Lições aprendidas (atualizado pelo Claude a cada rodada)
 
@@ -84,6 +92,11 @@ test_robustez_fase1b_2_1.py, test_agente_real_pexpect.py, test_tokens.py
   free — sempre checar limites reais do provider antes de assumir bug de código.
 - Fase 2.3: nenhum deslize registrado nesta rodada. Diff, testes e módulo
   novo (plan.py) vieram exatamente como especificado.
+- Fase 5: diagnóstico do teste `test_alucinacao_fallback_llama_8b` foi só
+  parcialmente confirmado — as 3 execuções de verificação reproduziram apenas
+  rate limit (skip), não o cenário original de resposta malformada em bloco de
+  código. O parser de fallback ainda não foi validado contra esse formato
+  específico.
 
 ## 6. Ethos compartilhado (injetado no system prompt de todo provider)
 

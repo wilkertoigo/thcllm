@@ -4,7 +4,7 @@ from typing import Optional
 
 import httpx
 
-from .base import BaseProvider
+from .base import BaseProvider, ProviderRateLimitError
 
 
 GEMINI_MODELS = [
@@ -59,6 +59,14 @@ class GeminiProvider(BaseProvider):
         url = f"{self.endpoint}/{model}:generateContent?key={self.api_key}"
         with httpx.Client(timeout=120.0) as client:
             resp = client.post(url, json=payload, headers={"Content-Type": "application/json"})
+        if resp.status_code == 429:
+            raise ProviderRateLimitError(self.name, status_code=resp.status_code, message="Rate limited")
+        try:
+            data = resp.json()
+        except Exception:
+            data = {}
+        if isinstance(data.get("error"), dict) and data["error"].get("status") == "RESOURCE_EXHAUSTED":
+            raise ProviderRateLimitError(self.name, status_code=429, message="RESOURCE_EXHAUSTED")
         resp.raise_for_status()
         data = resp.json()
         text = data["candidates"][0]["content"]["parts"][0]["text"]

@@ -2,7 +2,11 @@ import json
 import re
 from typing import Optional
 
+from .config import load_config
 from .memory import MemoryStore
+from .provider_fallback import chat_completion_with_fallback
+from .providers import get_provider
+from .providers.base import ProviderRateLimitError
 from .system_prompt import build_base_system_prompt
 from .tools import ALL_TOOLS, TOOLS_BY_NAME
 
@@ -117,6 +121,8 @@ def run_agent(
     on_thinking: Optional[callable] = None,
     on_round_complete: Optional[callable] = None,
     skill: Optional[dict] = None,
+    fallback_order: list[str] = None,
+    config: dict = None,
 ) -> str:
     tools_to_use = TOOLS_BY_NAME
     if skill and skill.get("tools_allowed"):
@@ -137,9 +143,41 @@ def run_agent(
     if skill and skill.get("system_prompt_extra"):
         system_prompt += "\n\n## Skill ativa: " + skill["name"] + "\n" + skill["system_prompt_extra"]
     messages = [{"role": "system", "content": system_prompt}] + list(messages)
+
+    state = {
+        "provider": provider,
+        "provider_name": getattr(provider, "name", None),
+    }
+
+    def _do_chat(messages_for_call):
+        if fallback_order and state["provider_name"] and state["provider_name"] != "thc":
+            def _on_fallback(from_name, to_name):
+                if on_tool_result:
+                    on_tool_result("fallback", f"⚠ {from_name} atingiu rate limit — mudando para {to_name}")
+            try:
+                result, used_name = chat_completion_with_fallback(
+                    messages=messages_for_call,
+                    model=model,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    config=config or load_config(),
+                    fallback_order=fallback_order,
+                    provider_name=state["provider_name"],
+                    on_fallback=_on_fallback,
+                )
+                if used_name != state["provider_name"]:
+                    state["provider_name"] = used_name
+                    state["provider"] = get_provider(used_name, config or {})
+                return result
+            except ProviderRateLimitError:
+                if on_tool_result:
+                    on_tool_result("fallback", "Erro: todos os providers da lista de fallback falharam")
+                raise
+        return _provider_chat_completion(state["provider"], messages_for_call, model, mode, web, max_tokens, temperature)
+
     for _ in range(max_rounds):
         messages = _truncate_history(messages)
-        result = _provider_chat_completion(provider, messages, model, mode, web, max_tokens, temperature)
+        result = _do_chat(messages)
         assistant_message = result["choices"][0]["message"]["content"]
         messages.append({"role": "assistant", "content": assistant_message})
         thinking = TOOL_CALL_PATTERN.split(assistant_message)[0].strip()
@@ -154,7 +192,7 @@ def run_agent(
             for retry in range(2):
                 error_msg = "Seu último tool_call não é JSON válido ou está malformado. Responda novamente APENAS com o bloco ```tool_call``` corrigido."
                 messages.append({"role": "user", "content": error_msg})
-                retry_result = _provider_chat_completion(provider, messages, model, mode, web, max_tokens, temperature)
+                retry_result = _do_chat(messages)
                 retry_message = retry_result["choices"][0]["message"]["content"]
                 messages.append({"role": "assistant", "content": retry_message})
                 tool_calls = _extract_tool_calls(retry_message)
